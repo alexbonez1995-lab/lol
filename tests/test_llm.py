@@ -5,7 +5,41 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from obito.config import Config
 from obito.llm import (BackendUnavailable, ChatResult, FakeBackend, LLMError, ModelInfo,
-                       ModelNotFound, OllamaBackend, OpenAICompatBackend, make_backend, parse_json)
+                       ModelNotFound, OllamaBackend, OpenAICompatBackend, ThinkFilter, make_backend,
+                       parse_json, strip_thinking)
+
+
+class ThinkingTest(unittest.TestCase):
+    def test_strip(self):
+        self.assertEqual(strip_thinking("<think>plan</think>\nAntwort"), "Antwort")
+        self.assertEqual(strip_thinking("a <THINK>x</THINK> b"), "a b")
+        self.assertEqual(strip_thinking("<think>offen"), "")
+        self.assertEqual(strip_thinking("nichts"), "nichts")
+        self.assertEqual(strip_thinking(""), "")
+
+    def test_filter_streams_only_outside(self):
+        out = []
+        f = ThinkFilter(out.append)
+        for p in ["Hallo <thi", "nk>geheim</th", "ink> Welt <t", "hink>x</think>!"]:
+            f.feed(p)
+        self.assertEqual(f.finish(), "Hallo Welt !")
+        self.assertEqual("".join(out), "Hallo Welt !")
+        self.assertNotIn("geheim", "".join(out))
+
+    def test_filter_plain_and_unclosed(self):
+        out = []
+        f = ThinkFilter(out.append)
+        f.feed("kein denken hier")
+        self.assertEqual(f.finish(), "kein denken hier")
+        self.assertEqual("".join(out), "kein denken hier")
+        out = []
+        f = ThinkFilter(out.append)
+        f.feed("<think>nie geschlossen")
+        self.assertEqual(f.finish(), "")
+        self.assertEqual(out, [])
+
+    def test_parse_json_ignores_thinking(self):
+        self.assertEqual(parse_json('<think>hm</think>{"a": 1}'), {"a": 1})
 
 
 class ParseJsonTest(unittest.TestCase):
@@ -56,6 +90,19 @@ class FakeBackendTest(unittest.TestCase):
         fb = FakeBackend(responder=resp)
         r = fb.chat([{"role": "system", "content": "s"}, {"role": "user", "content": "u"}], model="m2")
         self.assertEqual(r.text, "system=system modell=m2")
+
+    def test_records_runtime_options_and_strips_thinking(self):
+        fb = FakeBackend(responses=["<think>plan</think>Antwort 42"])
+        out = []
+        r = fb.chat([{"role": "user", "content": "x"}], stream=out.append, num_ctx=4096, seed=7,
+                    json_mode={"type": "object"}, think=False)
+        self.assertEqual(r.text, "Antwort 42")
+        self.assertEqual("".join(out), "Antwort 42")
+        c = fb.calls[0]
+        self.assertEqual((c["num_ctx"], c["seed"], c["think"]), (4096, 7, False))
+        self.assertEqual(c["json_mode"], {"type": "object"})
+        self.assertEqual(fb.version(), "fake")
+        self.assertEqual(fb.running(), [])
 
     def test_embed_deterministic_and_normalized(self):
         fb = FakeBackend(embed_dim=8)
@@ -110,7 +157,13 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path == "/api/tags":
+        if self.path == "/api/version":
+            self._send(200, json.dumps({"version": "0.12.0"}).encode())
+        elif self.path == "/api/ps":
+            self._send(200, json.dumps({"models": [
+                {"name": "qwen2.5:7b", "size": 5_000_000_000, "size_vram": 4_000_000_000,
+                 "expires_at": "2026-10-04T12:00:00Z"}]}).encode())
+        elif self.path == "/api/tags":
             self._send(200, json.dumps({"models": [
                 {"name": "qwen2.5:7b", "size": 4_000_000_000,
                  "details": {"family": "qwen2", "parameter_size": "7.6B", "quantization_level": "Q4_K_M"}},
@@ -131,6 +184,7 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             if body.get("stream"):
                 lines = [
+                    {"model": body["model"], "message": {"role": "assistant", "content": "<think>geheim</think>"}, "done": False},
                     {"model": body["model"], "message": {"role": "assistant", "content": "Hal"}, "done": False},
                     {"model": body["model"], "message": {"role": "assistant", "content": "lo"}, "done": False},
                     {"model": body["model"], "message": {"role": "assistant", "content": ""}, "done": True,
@@ -141,6 +195,8 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send(200, json.dumps({
                     "model": body["model"], "message": {"role": "assistant", "content": "Hallo"},
                     "prompt_eval_count": 5, "eval_count": 1, "done": True}).encode())
+        elif self.path == "/api/show":
+            self._send(200, json.dumps({"capabilities": ["completion", "tools", "thinking"]}).encode())
         elif self.path == "/api/embed":
             self._send(200, json.dumps({"embeddings": [[0.1, 0.2] for _ in body["input"]]}).encode())
         elif self.path == "/v1/chat/completions":
@@ -180,21 +236,35 @@ class HttpBackendsTest(unittest.TestCase):
         _Handler.log.clear()
 
     def test_ollama_chat_stream_models_embed(self):
-        b = OllamaBackend(f"http://127.0.0.1:{self.port}", "qwen2.5:7b", "nomic-embed-text", timeout=5)
+        b = OllamaBackend(f"http://127.0.0.1:{self.port}", "qwen2.5:7b", "nomic-embed-text", timeout=5,
+                          keep_alive="30m")
         self.assertTrue(b.available())
-        r = b.chat([{"role": "user", "content": "hi"}], temperature=0.1, max_tokens=50, json_mode=True)
+        r = b.chat([{"role": "user", "content": "hi"}], temperature=0.1, max_tokens=50, json_mode=True,
+                   num_ctx=8192, seed=3, think=False)
         self.assertEqual(r.text, "Hallo")
         self.assertEqual((r.prompt_tokens, r.completion_tokens), (5, 1))
         sent = _Handler.log[-1][1]
         self.assertEqual(sent["format"], "json")
-        self.assertEqual(sent["options"], {"temperature": 0.1, "num_predict": 50})
+        self.assertEqual(sent["options"], {"temperature": 0.1, "num_predict": 50, "num_ctx": 8192, "seed": 3})
+        self.assertEqual(sent["keep_alive"], "30m")
+        self.assertIs(sent["think"], False)
         self.assertFalse(sent["stream"])
+
+        schema = {"type": "object", "properties": {"a": {"type": "integer"}}}
+        b.chat([{"role": "user", "content": "hi"}], json_mode=schema)
+        self.assertEqual(_Handler.log[-1][1]["format"], schema)
+        self.assertNotIn("think", _Handler.log[-1][1])
 
         out = []
         r = b.chat([{"role": "user", "content": "hi"}], stream=out.append)
         self.assertEqual(r.text, "Hallo")
-        self.assertEqual(out, ["Hal", "lo"])
+        self.assertEqual("".join(out), "Hallo")
         self.assertEqual(r.completion_tokens, 2)
+
+        self.assertEqual(b.version(), "0.12.0")
+        self.assertEqual(b.running()[0]["size_vram"], 4_000_000_000)
+        self.assertIn("thinking", b.show("qwen2.5:7b")["capabilities"])
+        self.assertEqual(b.info()["version"], "0.12.0")
 
         models = b.list_models()
         self.assertEqual(models[0].name, "qwen2.5:7b")
@@ -215,11 +285,18 @@ class HttpBackendsTest(unittest.TestCase):
     def test_openai_compat(self):
         b = OpenAICompatBackend(f"http://127.0.0.1:{self.port}/v1", "lokal-modell", "embed", timeout=5)
         self.assertTrue(b.available())
-        r = b.chat([{"role": "user", "content": "hi"}], json_mode=True, stop=["END"])
+        r = b.chat([{"role": "user", "content": "hi"}], json_mode=True, stop=["END"], seed=1, num_ctx=4096)
         self.assertEqual(r.text, "Servus")
         sent = _Handler.log[-1][1]
         self.assertEqual(sent["response_format"], {"type": "json_object"})
         self.assertEqual(sent["stop"], ["END"])
+        self.assertEqual(sent["seed"], 1)
+        self.assertNotIn("num_ctx", sent)
+        schema = {"type": "object"}
+        b.chat([{"role": "user", "content": "hi"}], json_mode=schema)
+        self.assertEqual(_Handler.log[-1][1]["response_format"]["json_schema"]["schema"], schema)
+        self.assertEqual(b.running(), [])
+        self.assertIsNone(b.version())
         out = []
         r = b.chat([{"role": "user", "content": "hi"}], stream=out.append)
         self.assertEqual(r.text, "Servus")

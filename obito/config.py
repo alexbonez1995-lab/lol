@@ -29,16 +29,34 @@ class Config:
     fast_model: str = ""               # kleines Modell für Routing/Extraktion (leer = model)
     embed_model: str = "nomic-embed-text"
 
+    # Modell-Laufzeit
+    num_ctx: int = 8192                # Kontextfenster in Tokens (8 GB VRAM: 8192 mit 7B-Q4; 16 GB: 16384)
+    keep_alive: str = "30m"            # Ollama: Modell so lange im Speicher halten
+    think: str = "auto"                # Denk-Modelle (qwen3, deepseek-r1): auto | an | aus
+    parallel_calls: int = 2            # gleichzeitige Modellaufrufe (auf OLLAMA_NUM_PARALLEL abstimmen)
+    timeout: float = 300.0             # Sekunden ohne Daten vom Modell (Leerlauf-Timeout)
+    deadline: float = 600.0            # Sekunden Gesamtbudget pro Frage
+
     # Denken
-    depth: str = "auto"                # auto | schnell | tief
-    experts_per_question: int = 5
+    depth: str = "auto"                # auto | schnell | mittel | tief
+    experts_per_question: int = 5      # Stufe "tief": Experten + Kritiker + Revision
+    experts_medium: int = 3            # Stufe "mittel": Experten + Synthese, kein Kritiker
     max_revision_rounds: int = 1
+    max_revised_experts: int = 2
     max_tool_rounds: int = 4
+    max_tool_calls_per_answer: int = 3
     max_history: int = 12
     memory_recall: int = 6
     example_recall: int = 3
+    max_new_memories: int = 3          # automatisch gemerkte Erinnerungen je Antwort
     temperature: float = 0.4
-    timeout: float = 300.0
+
+    # Ausgabe-Budget je Stufe (Tokens)
+    max_tokens_fast: int = 1500
+    max_tokens_expert: int = 900
+    max_tokens_critic: int = 700
+    max_tokens_synthesis: int = 1800
+    max_tokens_json: int = 500
 
     # Verhalten
     allow_tools: bool = True

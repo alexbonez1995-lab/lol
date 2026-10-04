@@ -174,6 +174,52 @@ class MemoryVectorTest(unittest.TestCase):
         self.assertIn("Carbon", hits[0].content)
         self.assertTrue(all(h.score < hits[0].score for h in hits[1:]))
 
+    def test_min_importance_filters_recall(self):
+        m = self.store.remember("Carbon Rahmen Drohne", importance=0.1)
+        self.assertEqual(self.store.search("Carbon Drohne", min_importance=0.15), [])
+        self.assertEqual([x.id for x in self.store.search("Carbon Drohne")], [m.id])
+
+    def test_set_embedder_later_and_reindex(self):
+        store = MemoryStore(":memory:")
+        store.remember("Drohne Carbon Rahmen")
+        store.remember("Apfelkuchen Rezept")
+        self.assertEqual(store.stats()["ohne_vektor"], 2)
+        store.set_embedder(FakeBackend(embed_dim=64).embed, "fake-64")
+        self.assertEqual(store.reindex(), 2)
+        st = store.stats()
+        self.assertEqual((st["mit_vektor"], st["ohne_vektor"], st["embedding_modell"], st["embedding_dim"]),
+                         (2, 0, "fake-64", 64))
+        self.assertEqual(store.reindex(), 0)
+        store.close()
+
+    def test_model_switch_ignores_old_vectors_until_reindex(self):
+        store = MemoryStore(":memory:", embedder=FakeBackend(embed_dim=32).embed, embed_model="fake-32")
+        a = store.remember("Drohne Carbon Rahmen")
+        store.set_embedder(FakeBackend(embed_dim=64).embed, "fake-64")
+        b = store.remember("Neuer Eintrag mit anderem Modell")
+        st = store.stats()
+        self.assertEqual((st["mit_vektor"], st["ohne_vektor"]), (1, 1))
+        # alte Erinnerung bleibt über Volltext auffindbar, nicht abgewertet
+        hits = store.search("Carbon Drohne")
+        self.assertEqual([h.id for h in hits], [a.id])
+        self.assertEqual(store.reindex(only_missing=True), 0)   # alter Vektor ist vorhanden, nur falsch
+        self.assertEqual(store.reindex(), 1)
+        self.assertEqual(store.stats()["ohne_vektor"], 0)
+        self.assertIsNotNone(store.get(b.id).embedding)
+        store.close()
+
+    def test_persisted_embed_model_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "m.db")
+            s = MemoryStore(p, embedder=FakeBackend(embed_dim=8).embed, embed_model="fake-8")
+            s.remember("etwas")
+            s.close()
+            s2 = MemoryStore(p)
+            st = s2.stats()
+            self.assertEqual((st["embedding_dim"], st["mit_vektor"]), (8, 1))
+            s2.close()
+            s2.close()   # idempotent
+
     def test_embedder_failure_is_tolerated(self):
         def broken(texts):
             raise RuntimeError("kaputt")

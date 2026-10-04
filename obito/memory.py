@@ -61,6 +61,11 @@ CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE OF content, tags ON memori
     INSERT INTO memories_fts(rowid, content, tags) VALUES (new.id, new.content, new.tags);
 END;
 
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
 CREATE TABLE IF NOT EXISTS messages (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id  TEXT NOT NULL,
@@ -112,19 +117,43 @@ class Memory:
 class MemoryStore:
     """Thread-sicherer Zugriff auf das persistente Gedächtnis."""
 
-    def __init__(self, path: str | Path, embedder: Embedder | None = None):
+    def __init__(self, path: str | Path, embedder: Embedder | None = None, embed_model: str = ""):
         self.path = str(path)
         if self.path != ":memory:":
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
-        self.embedder = embedder
         self._lock = threading.RLock()
         self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(_SCHEMA)
         self._db.commit()
+        self._closed = False
+        self.embedder: Embedder | None = None
+        self.embed_model = ""
+        self.embed_dim = int(self._meta("embed_dim") or 0)
+        self.set_embedder(embedder, embed_model)
 
     # ------------------------------------------------------------------ intern
+    def _meta(self, key: str) -> str | None:
+        row = self._db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def _set_meta(self, key: str, value: str) -> None:
+        self._db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, value))
+        self._db.commit()
+
+    def set_embedder(self, embedder: Embedder | None, model_name: str = "") -> None:
+        """Setzt (oder wechselt) das Embedding-Modell. Vektoren eines anderen Modells
+        werden in der Suche ignoriert, bis :meth:`reindex` sie neu berechnet."""
+        with self._lock:
+            self.embedder = embedder
+            self.embed_model = model_name or ("" if embedder is None else self._meta("embed_model") or "")
+            if embedder is not None and model_name:
+                stored = self._meta("embed_model")
+                if stored and stored != model_name:
+                    self.embed_dim = 0          # Dimension des neuen Modells noch unbekannt
+                self._set_meta("embed_model", model_name)
+
     def _embed(self, texts: Sequence[str]) -> list[list[float]] | None:
         if not self.embedder:
             return None
@@ -134,7 +163,21 @@ class MemoryStore:
             return None
         if not vecs or len(vecs) != len(texts):
             return None
+        dim = len(vecs[0])
+        if dim and dim != self.embed_dim:
+            with self._lock:
+                self.embed_dim = dim
+                self._set_meta("embed_dim", str(dim))
         return vecs
+
+    def _vec_ok(self, raw: str | None) -> list[float] | None:
+        """Gespeicherter Vektor, falls er zur aktuellen Dimension passt."""
+        if not raw:
+            return None
+        vec = json.loads(raw)
+        if self.embed_dim and len(vec) != self.embed_dim:
+            return None
+        return vec
 
     @staticmethod
     def _row(row: sqlite3.Row, score: float = 0.0) -> Memory:
@@ -209,9 +252,41 @@ class MemoryStore:
             "SELECT id, embedding FROM memories WHERE embedding IS NOT NULL AND project IS ?",
             (project,),
         ):
-            if cosine(emb, json.loads(r["embedding"])) >= 0.97:
+            vec = self._vec_ok(r["embedding"])
+            if vec and cosine(emb, vec) >= 0.97:
                 return r["id"]
         return None
+
+    def reindex(self, batch_size: int = 32, progress: Callable[[int, int], None] | None = None,
+                only_missing: bool = False) -> int:
+        """Berechnet Vektoren neu: fehlende (immer) und – ohne ``only_missing`` – auch solche
+        mit abweichender Dimension (Modellwechsel). Rückgabe: Anzahl aktualisierter Zeilen."""
+        if not self.embedder:
+            return 0
+        with self._lock:
+            rows = self._db.execute("SELECT id, content, embedding FROM memories ORDER BY id").fetchall()
+        todo = []
+        for r in rows:
+            if r["embedding"] is None:
+                todo.append((r["id"], r["content"]))
+            elif not only_missing and self._vec_ok(r["embedding"]) is None:
+                todo.append((r["id"], r["content"]))
+        done = 0
+        for i in range(0, len(todo), max(1, batch_size)):
+            batch = todo[i:i + batch_size]
+            vecs = self._embed([c for _, c in batch])
+            if not vecs:
+                break
+            with self._lock:
+                self._db.executemany(
+                    "UPDATE memories SET embedding = ? WHERE id = ?",
+                    [(json.dumps(v), mid) for (mid, _), v in zip(batch, vecs)],
+                )
+                self._db.commit()
+            done += len(batch)
+            if progress:
+                progress(done, len(todo))
+        return done
 
     def forget(self, memory_id: int) -> bool:
         with self._lock:
@@ -254,14 +329,20 @@ class MemoryStore:
             projects = [r[0] for r in self._db.execute(
                 "SELECT DISTINCT project FROM memories WHERE project IS NOT NULL ORDER BY project")]
             msgs = self._db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-            with_vec = self._db.execute(
-                "SELECT COUNT(*) FROM memories WHERE embedding IS NOT NULL").fetchone()[0]
+            with_vec = 0
+            for r in self._db.execute("SELECT embedding FROM memories WHERE embedding IS NOT NULL"):
+                if self._vec_ok(r["embedding"]) is not None:
+                    with_vec += 1
+        total = sum(kinds.values())
         return {
-            "erinnerungen": sum(kinds.values()),
+            "erinnerungen": total,
             "nach_art": kinds,
             "projekte": projects,
             "nachrichten": msgs,
             "mit_vektor": with_vec,
+            "ohne_vektor": total - with_vec,
+            "embedding_modell": self.embed_model,
+            "embedding_dim": self.embed_dim,
         }
 
     @staticmethod
@@ -281,8 +362,12 @@ class MemoryStore:
         project: str | None = None,
         min_score: float = 0.05,
         touch: bool = True,
+        min_importance: float = 0.0,
     ) -> list[Memory]:
-        """Hybride Suche: Volltext + Vektor + Wichtigkeit + Aktualität."""
+        """Hybride Suche: Volltext + Vektor + Wichtigkeit + Aktualität.
+
+        Erinnerungen ohne (passenden) Vektor werden rein textbasiert bewertet, nicht abgewertet.
+        ``min_importance`` blendet abgewertete Erinnerungen aus dem Abruf aus."""
         candidates: dict[int, dict] = {}
         fts = self._fts_query(query)
         proj_sql = " AND (m.project = ? OR m.project IS NULL)" if project else ""
@@ -307,7 +392,10 @@ class MemoryStore:
                 where = " WHERE embedding IS NOT NULL" + (
                     " AND (project = ? OR project IS NULL)" if project else "")
                 for r in self._db.execute(f"SELECT * FROM memories{where}", proj_args):
-                    sim = cosine(qvec[0], json.loads(r["embedding"]))
+                    vec = self._vec_ok(r["embedding"])
+                    if vec is None:
+                        continue
+                    sim = cosine(qvec[0], vec)
                     if sim > 0.3:
                         c = candidates.setdefault(r["id"], {"row": r, "text": 0.0})
                         c["vec"] = sim
@@ -316,10 +404,12 @@ class MemoryStore:
         scored: list[Memory] = []
         for c in candidates.values():
             r = c["row"]
+            if r["importance"] < min_importance:
+                continue
             age_days = (now - r["last_access"]) / 86400
             recency = math.exp(-age_days / 30)
-            text, vec = c.get("text", 0.0), c.get("vec", 0.0)
-            relevance = 0.6 * vec + 0.4 * text if qvec else text
+            text = c.get("text", 0.0)
+            relevance = 0.6 * c["vec"] + 0.4 * text if "vec" in c else text
             score = 0.75 * relevance + 0.15 * r["importance"] + 0.10 * recency
             if relevance > 0 and score >= min_score:
                 scored.append(self._row(r, score))
@@ -376,4 +466,6 @@ class MemoryStore:
 
     def close(self) -> None:
         with self._lock:
-            self._db.close()
+            if not self._closed:
+                self._db.close()
+                self._closed = True
