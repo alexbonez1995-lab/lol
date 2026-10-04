@@ -102,8 +102,10 @@ class ResolveTest(WorkspaceCase):
 class RegistryTest(WorkspaceCase):
     def test_builtin_names(self):
         names = [t.name for t in self.reg.list()]
+        from obito.engineering import TOOL_NAMES
         self.assertEqual(names, ["rechnen", "zeit", "system_info", "verzeichnis", "datei_lesen",
-                                 "datei_schreiben", "python_ausfuehren", "befehl_ausfuehren"])
+                                 "datei_schreiben", "python_ausfuehren", "befehl_ausfuehren", *TOOL_NAMES])
+        self.assertTrue(all(not self.reg.get(n).dangerous for n in TOOL_NAMES))
         self.assertTrue(self.reg.get("datei_schreiben").dangerous)
         self.assertTrue(self.reg.get("python_ausfuehren").dangerous)
         self.assertTrue(self.reg.get("befehl_ausfuehren").dangerous)

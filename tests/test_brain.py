@@ -116,8 +116,9 @@ class DataclassTest(unittest.TestCase):
                    interaction_id=7, tokens=9, duration=0.5)
         d = a.to_dict()
         self.assertEqual(list(d), ["antwort", "frage", "sitzung", "projekt", "tiefe", "experten", "kritik",
-                                   "erinnerungen_genutzt", "erinnerungen_neu", "werkzeuge", "spur",
+                                   "erinnerungen_genutzt", "erinnerungen_neu", "werkzeuge", "dokumente", "spur",
                                    "interaktion_id", "tokens", "dauer"])
+        self.assertEqual(d["dokumente"], [])
         self.assertEqual(d["erinnerungen_genutzt"][0]["id"], 3)
         self.assertEqual(d["spur"][1]["status"], "fehler")
         trace = json.loads(a.trace_json(max_detail=100))
@@ -796,7 +797,8 @@ class LearningTest(BrainTestBase):
         self.assertIn("Verbindliche Lektionen", sys_msg)
         self.assertIn("Projekt: Gehäuse", sys_msg)
         self.assertIn("[fakt] Der Nutzer druckt", sys_msg)
-        self.assertEqual(a.steps[0].summary, "1 Erinnerungen, 1 Lektionen, 0 Beispiele, 0 Verlaufsnachrichten")
+        self.assertEqual(a.steps[0].summary, "1 Erinnerungen, 1 Lektionen, 0 Beispiele, 0 Dokument-Auszüge, "
+                                             "0 Verlaufsnachrichten, Projektkontext")
         # Verlauf und Beispiele landen im nächsten Prompt
         self.learning.rate(a.interaction_id, 1)
         brain.ask("Und welche Düse für PLA?", depth="schnell", session_id="s1", project="Gehäuse")
@@ -1066,7 +1068,11 @@ class ManagementTest(BrainTestBase):
         s = brain.status()
         self.assertEqual(set(s), {"backend", "verfuegbar", "modell", "routing_modell", "embedding_aktiv", "modelle",
                                   "gedaechtnis", "lernen", "werkzeuge", "beschaeftigt", "tiefe", "datenverzeichnis",
-                                  "vektoren"})
+                                  "vektoren", "wissen", "projekte", "missionen", "automationen"})
+        self.assertEqual(s["missionen"], {"laufend": [], "anzahl": 0})
+        self.assertFalse(s["automationen"]["aktiv"])
+        self.assertIn("dokumente", s["wissen"])
+        self.assertIn("projekte", s["projekte"])
         self.assertEqual(s["backend"], "fake")
         self.assertTrue(s["verfuegbar"])
         self.assertEqual(s["modell"], "fake-modell")

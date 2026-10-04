@@ -175,6 +175,11 @@ class ObitoServer(ThreadingHTTPServer):
         if tools is not None:
             flag = self.allow_dangerous
             tools.set_policy(confirm=lambda name, args: flag, confirm_dangerous=True)
+        set_policy = getattr(brain, "set_dangerous_policy", None)
+        if callable(set_policy):
+            set_policy(self.allow_dangerous)
+            if tools is not None:
+                tools.set_policy(confirm=lambda name, args: flag, confirm_dangerous=True)
 
         if not _is_loopback(host):
             print(
@@ -185,6 +190,34 @@ class ObitoServer(ThreadingHTTPServer):
             )
         self.log(f"Server gestartet auf {host}:{self.port} (gefaehrliche Werkzeuge: "
                  f"{'erlaubt' if self.allow_dangerous else 'gesperrt'})")
+
+    # ------------------------------------------------------ Hintergrund
+    def start_background(self) -> bool:
+        """Startet den Automations-Zeitplaner des Denkkerns (falls vorhanden). ``True`` wenn gestartet."""
+        scheduler = getattr(self.brain, "automation", None)
+        start = getattr(scheduler, "start", None)
+        if not callable(start):
+            return False
+        try:
+            start()
+            self.log("Automations-Zeitplaner gestartet")
+            return True
+        except Exception as e:  # noqa: BLE001
+            self.log_exception("Zeitplaner starten", e)
+            return False
+
+    def stop_background(self) -> None:
+        scheduler = getattr(self.brain, "automation", None)
+        stop = getattr(scheduler, "stop", None)
+        if callable(stop):
+            try:
+                stop()
+            except Exception as e:  # noqa: BLE001
+                self.log_exception("Zeitplaner stoppen", e)
+
+    def server_close(self) -> None:
+        self.stop_background()
+        super().server_close()
 
     # ------------------------------------------------------------- Protokoll
     def log(self, text: str) -> None:
@@ -240,6 +273,38 @@ _ROUTES: tuple[_Route, ...] = (
     ("GET", re.compile(r"^/api/lektionen$"), "route_lektionen_get"),
     ("DELETE", re.compile(r"^/api/lektionen/(\d+)$"), "route_lektionen_delete"),
     ("GET", re.compile(r"^/api/modelle$"), "route_modelle"),
+    # ---- Phase 2
+    ("POST", re.compile(r"^/api/modell$"), "route_modell_post"),
+    ("POST", re.compile(r"^/api/modelle/pull$"), "route_modelle_pull"),
+    ("DELETE", re.compile(r"^/api/modelle/([^/]+)$"), "route_modelle_delete"),
+    ("GET", re.compile(r"^/api/dokumente$"), "route_dokumente_get"),
+    ("POST", re.compile(r"^/api/dokumente$"), "route_dokumente_post"),
+    ("GET", re.compile(r"^/api/dokumente/suche$"), "route_dokumente_suche"),
+    ("POST", re.compile(r"^/api/dokumente/sync$"), "route_dokumente_sync"),
+    ("DELETE", re.compile(r"^/api/dokumente/(\d+)$"), "route_dokumente_delete"),
+    ("GET", re.compile(r"^/api/projekte$"), "route_projekte_get"),
+    ("POST", re.compile(r"^/api/projekte$"), "route_projekte_post"),
+    ("GET", re.compile(r"^/api/projekte/([^/]+)$"), "route_projekt_get"),
+    ("DELETE", re.compile(r"^/api/projekte/([^/]+)$"), "route_projekt_delete"),
+    ("POST", re.compile(r"^/api/projekte/([^/]+)/notizen$"), "route_projekt_notiz_post"),
+    ("POST", re.compile(r"^/api/notizen/(\d+)/erledigt$"), "route_notiz_erledigt"),
+    ("DELETE", re.compile(r"^/api/notizen/(\d+)$"), "route_notiz_delete"),
+    ("GET", re.compile(r"^/api/missionen$"), "route_missionen_get"),
+    ("POST", re.compile(r"^/api/missionen$"), "route_missionen_post"),
+    ("GET", re.compile(r"^/api/missionen/(\d+)$"), "route_mission_get"),
+    ("POST", re.compile(r"^/api/missionen/(\d+)/start$"), "route_mission_start"),
+    ("POST", re.compile(r"^/api/missionen/(\d+)/stop$"), "route_mission_stop"),
+    ("DELETE", re.compile(r"^/api/missionen/(\d+)$"), "route_mission_delete"),
+    ("GET", re.compile(r"^/api/automationen$"), "route_automationen_get"),
+    ("POST", re.compile(r"^/api/automationen$"), "route_automationen_post"),
+    ("GET", re.compile(r"^/api/automationen/vorschlaege$"), "route_automationen_vorschlaege"),
+    ("POST", re.compile(r"^/api/automationen/vorschlaege$"), "route_automationen_vorschlaege_post"),
+    ("POST", re.compile(r"^/api/automationen/(\d+)/jetzt$"), "route_automation_jetzt"),
+    ("POST", re.compile(r"^/api/automationen/(\d+)/aktiv$"), "route_automation_aktiv"),
+    ("GET", re.compile(r"^/api/automationen/(\d+)/laeufe$"), "route_automation_laeufe"),
+    ("DELETE", re.compile(r"^/api/automationen/(\d+)$"), "route_automation_delete"),
+    ("POST", re.compile(r"^/api/pflege/konsolidieren$"), "route_konsolidieren"),
+    ("POST", re.compile(r"^/api/pflege/backup$"), "route_backup"),
 )
 
 
@@ -651,7 +716,352 @@ class ObitoHandler(BaseHTTPRequestHandler):
     def route_modelle(self) -> None:
         brain = self.server.brain
         models = brain.models()
-        self._send_json(200, {"ok": True, "modelle": [m.to_dict() for m in models], "aktuell": brain.cfg.model})
+        self._send_json(200, {"ok": True, "modelle": [m.to_dict() for m in models], "aktuell": brain.cfg.model,
+                              "schnell": brain.cfg.fast_model})
+
+    # ------------------------------------------------------ Phase 2: Modell-Hub
+    def route_modell_post(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True, allow_empty=True) or ""
+        fast = self._opt_bool(data, "schnell", False)
+        brain = self.server.brain
+        try:
+            brain.set_model(name, fast=fast)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        except Exception as e:  # ModelNotFound und andere Backend-Fehler
+            if type(e).__name__ == "ModelNotFound":
+                raise _HttpError(404, f"Modell »{name}« ist nicht installiert – `ollama pull {name}`.") from None
+            raise
+        self._send_json(200, {"ok": True, "modell": brain.cfg.model, "schnell": brain.cfg.fast_model})
+
+    def route_modelle_pull(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True)
+        backend = self.server.brain.backend
+        self._sse_start()
+        try:
+            ok = backend.pull(name, progress=lambda chunk: self._sse_emit("fortschritt", chunk))
+        except Exception as e:  # noqa: BLE001
+            self._sse_emit("fehler", {"fehler": f"Modell »{name}« konnte nicht geladen werden: {e}"})
+        else:
+            if ok:
+                self._sse_emit("fertig", {"name": name})
+            else:
+                self._sse_emit("fehler", {"fehler": f"Modell »{name}« konnte nicht geladen werden (Backend ohne Pull)."})
+        finally:
+            self._sse_end()
+
+    def route_modelle_delete(self, name: str) -> None:
+        from urllib.parse import unquote
+        name = unquote(name)
+        if not self.server.brain.backend.delete(name):
+            raise _HttpError(404, f"Modell »{name}« unbekannt oder Löschen nicht unterstützt")
+        self._send_json(200, {"ok": True, "geloescht": name})
+
+    # ------------------------------------------------------ Phase 2: Dokumente
+    def _knowledge(self):
+        store = getattr(self.server.brain, "knowledge", None)
+        if store is None:
+            raise _HttpError(503, "Wissensbasis ist in diesem Denkkern nicht verfügbar")
+        return store
+
+    def route_dokumente_get(self) -> None:
+        docs = self._knowledge().list(self._query_str("projekt"))
+        self._send_json(200, {"ok": True, "dokumente": [d.to_dict() for d in docs]})
+
+    def route_dokumente_post(self) -> None:
+        data = self.body or {}
+        store = self._knowledge()
+        projekt = self._opt_str(data, "projekt")
+        pfad = self._opt_str(data, "pfad")
+        titel = self._opt_str(data, "titel")
+        text = data.get("text")
+        try:
+            if pfad:
+                try:
+                    resolved = self.server.brain.tools.resolve(pfad)
+                except PermissionError as e:
+                    raise _HttpError(403, str(e)) from None
+                if not Path(resolved).exists():
+                    raise _HttpError(404, f"Datei oder Ordner nicht gefunden: {pfad}")
+                if Path(resolved).is_dir():
+                    result = store.add_directory(resolved, project=projekt)
+                    self._send_json(200, {"ok": True, "verzeichnis": result})
+                    return
+                doc = store.add_file(resolved, project=projekt, title=titel)
+            else:
+                if not isinstance(text, str) or not text.strip():
+                    raise _HttpError(400, "Feld »pfad« oder »titel« + »text« erforderlich")
+                if not titel:
+                    raise _HttpError(400, "Feld »titel« fehlt")
+                doc = store.add_text(titel, text, project=projekt)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        except FileNotFoundError as e:
+            raise _HttpError(404, str(e)) from None
+        self._send_json(200, {"ok": True, "dokument": doc.to_dict()})
+
+    def route_dokumente_suche(self) -> None:
+        q = self._query_str("q")
+        if not q:
+            raise _HttpError(400, "Parameter »q« fehlt")
+        n = self._query_int("n", 5) or 5
+        hits = self._knowledge().search(q, k=n, project=self._query_str("projekt"))
+        self._send_json(200, {"ok": True, "treffer": [c.to_dict() for c in hits]})
+
+    def route_dokumente_sync(self) -> None:
+        result = self._knowledge().sync()
+        self._send_json(200, {"ok": True, **result})
+
+    def route_dokumente_delete(self, doc_id: str) -> None:
+        if not self._knowledge().remove(int(doc_id)):
+            raise _HttpError(404, f"Dokument {doc_id} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(doc_id)})
+
+    # ------------------------------------------------------ Phase 2: Projekte
+    def _projects(self):
+        store = getattr(self.server.brain, "projects", None)
+        if store is None:
+            raise _HttpError(503, "Projektsystem ist in diesem Denkkern nicht verfügbar")
+        return store
+
+    @staticmethod
+    def _unquote(value: str) -> str:
+        from urllib.parse import unquote
+        return unquote(value).strip()
+
+    def route_projekte_get(self) -> None:
+        alle = (self._query_str("alle") or "").lower() in ("1", "true", "ja", "wahr")
+        projects = self._projects().list(include_archived=alle)
+        self._send_json(200, {"ok": True, "projekte": [p.to_dict() for p in projects]})
+
+    def route_projekte_post(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True)
+        beschreibung = self._opt_str(data, "beschreibung", allow_empty=True) or ""
+        tags_raw = data.get("tags", [])
+        if isinstance(tags_raw, str):
+            tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+        elif isinstance(tags_raw, list) and all(isinstance(t, str) for t in tags_raw):
+            tags = [t.strip() for t in tags_raw if t.strip()]
+        else:
+            raise _HttpError(400, "Feld »tags« muss eine Liste von Texten sein")
+        try:
+            project = self._projects().create(name, beschreibung, tags)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "projekt": project.to_dict()})
+
+    def route_projekt_get(self, name: str) -> None:
+        name = self._unquote(name)
+        store = self._projects()
+        project = store.get(name)
+        if project is None:
+            raise _HttpError(404, f"Projekt »{name}« unbekannt")
+        self._send_json(200, {
+            "ok": True, "projekt": project.to_dict(),
+            "notizen": [n.to_dict() for n in store.notes(name, limit=200)],
+            "dateien": store.files(name),
+            "zusammenfassung": store.summary(name),
+        })
+
+    def route_projekt_delete(self, name: str) -> None:
+        name = self._unquote(name)
+        try:
+            project = self._projects().archive(name)
+        except ValueError as e:
+            raise _HttpError(404, str(e)) from None
+        self._send_json(200, {"ok": True, "projekt": project.to_dict()})
+
+    def route_projekt_notiz_post(self, name: str) -> None:
+        name = self._unquote(name)
+        data = self.body or {}
+        art = self._opt_str(data, "art") or "notiz"
+        titel = self._opt_str(data, "titel", required=True)
+        inhalt = self._opt_str(data, "inhalt", allow_empty=True) or ""
+        store = self._projects()
+        if store.get(name) is None:
+            raise _HttpError(404, f"Projekt »{name}« unbekannt")
+        try:
+            note = store.add_note(name, art, titel, inhalt)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "notiz": note.to_dict()})
+
+    def route_notiz_erledigt(self, note_id: str) -> None:
+        data = self.body or {}
+        done = self._opt_bool(data, "erledigt", True)
+        try:
+            note = self._projects().complete(int(note_id), done)
+        except ValueError as e:
+            raise _HttpError(404, str(e)) from None
+        self._send_json(200, {"ok": True, "notiz": note.to_dict()})
+
+    def route_notiz_delete(self, note_id: str) -> None:
+        if not self._projects().delete_note(int(note_id)):
+            raise _HttpError(404, f"Notiz {note_id} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(note_id)})
+
+    # ------------------------------------------------------ Phase 2: Missionen
+    def _missions(self):
+        runner = getattr(self.server.brain, "missions", None)
+        if runner is None:
+            raise _HttpError(503, "Missionen sind in diesem Denkkern nicht verfügbar")
+        return runner
+
+    def route_missionen_get(self) -> None:
+        runner = self._missions()
+        status = self._query_str("status")
+        n = self._query_int("n", 50) or 50
+        missions = runner.store.list(status=status, limit=n)
+        self._send_json(200, {"ok": True, "missionen": [m.to_dict() for m in missions], "laufend": runner.running()})
+
+    def route_missionen_post(self) -> None:
+        data = self.body or {}
+        ziel = self._opt_str(data, "ziel", required=True)
+        projekt = self._opt_str(data, "projekt")
+        start = self._opt_bool(data, "start", False)
+        runner = self._missions()
+        if self.server.brain.busy:
+            raise _HttpError(409, "OBITO denkt gerade – bitte kurz warten.")
+        try:
+            mission = runner.plan(ziel, project=projekt)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        if start:
+            try:
+                runner.start(mission.id)
+            except RuntimeError as e:
+                raise _HttpError(409, str(e)) from None
+            mission = runner.store.get(mission.id) or mission
+        self._send_json(200, {"ok": True, "mission": mission.to_dict()})
+
+    def route_mission_get(self, mid: str) -> None:
+        mission = self._missions().store.get(int(mid))
+        if mission is None:
+            raise _HttpError(404, f"Mission {mid} unbekannt")
+        self._send_json(200, {"ok": True, "mission": mission.to_dict(),
+                              "laeuft": int(mid) in self._missions().running()})
+
+    def route_mission_start(self, mid: str) -> None:
+        runner = self._missions()
+        try:
+            runner.start(int(mid))
+        except ValueError as e:
+            raise _HttpError(404, str(e)) from None
+        except RuntimeError as e:
+            raise _HttpError(409, str(e)) from None
+        mission = runner.store.get(int(mid))
+        self._send_json(200, {"ok": True, "mission": mission.to_dict() if mission else None})
+
+    def route_mission_stop(self, mid: str) -> None:
+        runner = self._missions()
+        if runner.store.get(int(mid)) is None:
+            raise _HttpError(404, f"Mission {mid} unbekannt")
+        stopped = runner.stop(int(mid))
+        mission = runner.store.get(int(mid))
+        self._send_json(200, {"ok": True, "gestoppt": bool(stopped), "mission": mission.to_dict() if mission else None})
+
+    def route_mission_delete(self, mid: str) -> None:
+        runner = self._missions()
+        if runner.store.get(int(mid)) is None:
+            raise _HttpError(404, f"Mission {mid} unbekannt")
+        if int(mid) in runner.running():
+            runner.stop(int(mid))
+            join = getattr(runner, "join", None)
+            if callable(join):
+                join(int(mid), 5.0)
+        runner.store.delete(int(mid))
+        self._send_json(200, {"ok": True, "geloescht": int(mid)})
+
+    # ---------------------------------------------------- Phase 2: Automationen
+    def _automation(self):
+        scheduler = getattr(self.server.brain, "automation", None)
+        if scheduler is None:
+            raise _HttpError(503, "Automationen sind in diesem Denkkern nicht verfügbar")
+        return scheduler
+
+    def route_automationen_get(self) -> None:
+        scheduler = self._automation()
+        self._send_json(200, {"ok": True, "automationen": [a.to_dict() for a in scheduler.store.list()],
+                              "zeitplaner_aktiv": bool(scheduler.running)})
+
+    def route_automationen_post(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True)
+        art = self._opt_str(data, "art", required=True)
+        intervall = self._opt_int(data, "intervall_minuten", required=True)
+        params = data.get("parameter", {})
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            raise _HttpError(400, "Feld »parameter« muss ein Objekt sein")
+        aktiv = self._opt_bool(data, "aktiv", True)
+        try:
+            auto = self._automation().store.create(name, art, int(intervall), params, aktiv)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "automation": auto.to_dict()})
+
+    def route_automationen_vorschlaege(self) -> None:
+        from .automation import default_automations
+        self._send_json(200, {"ok": True, "vorschlaege": default_automations()})
+
+    def route_automationen_vorschlaege_post(self) -> None:
+        from .automation import install_defaults
+        data = self.body or {}
+        aktiv = self._opt_bool(data, "aktiv", True)
+        created = install_defaults(self._automation().store, enabled=aktiv)
+        self._send_json(200, {"ok": True, "automationen": [a.to_dict() for a in created]})
+
+    def route_automation_jetzt(self, aid: str) -> None:
+        scheduler = self._automation()
+        try:
+            status, message = scheduler.run_once(int(aid))
+        except ValueError as e:
+            raise _HttpError(404, str(e)) from None
+        auto = scheduler.store.get(int(aid))
+        self._send_json(200, {"ok": True, "status": status, "meldung": message,
+                              "automation": auto.to_dict() if auto else None})
+
+    def route_automation_aktiv(self, aid: str) -> None:
+        data = self.body or {}
+        aktiv = self._opt_bool(data, "aktiv", True)
+        try:
+            auto = self._automation().store.update(int(aid), enabled=aktiv)
+        except ValueError as e:
+            raise _HttpError(404, str(e)) from None
+        self._send_json(200, {"ok": True, "automation": auto.to_dict()})
+
+    def route_automation_laeufe(self, aid: str) -> None:
+        scheduler = self._automation()
+        if scheduler.store.get(int(aid)) is None:
+            raise _HttpError(404, f"Automation {aid} unbekannt")
+        n = self._query_int("n", 20) or 20
+        self._send_json(200, {"ok": True, "laeufe": scheduler.store.runs(int(aid), n)})
+
+    def route_automation_delete(self, aid: str) -> None:
+        if not self._automation().store.delete(int(aid)):
+            raise _HttpError(404, f"Automation {aid} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(aid)})
+
+    # ---------------------------------------------------------- Phase 2: Pflege
+    def route_konsolidieren(self) -> None:
+        data = self.body or {}
+        tage = self._opt_int(data, "tage")
+        projekt = self._opt_str(data, "projekt")
+        brain = self.server.brain
+        if brain.busy:
+            raise _HttpError(409, "OBITO denkt gerade – bitte kurz warten.")
+        result = brain.consolidate(days=7 if tage is None else int(tage), project=projekt)
+        self._send_json(200, {"ok": True, **result})
+
+    def route_backup(self) -> None:
+        data = self.body or {}
+        keep = self._opt_int(data, "behalten")
+        target = self.server.brain.backup(keep=7 if keep is None else int(keep))
+        self._send_json(200, {"ok": True, "pfad": str(target)})
 
 
 # ----------------------------------------------------------------- Komfort
@@ -664,6 +1074,7 @@ def serve(brain, host: str | None = None, port: int | None = None, *, allow_dang
                          allow_dangerous=allow_dangerous)
     if on_start is not None:
         on_start(server)
+    server.start_background()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

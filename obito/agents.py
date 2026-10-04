@@ -47,7 +47,7 @@ _STAGE_RE = re.compile(r"\[OBITO:(\w+):([\w-]+)\]\s*$")
 _WORD = re.compile(r"\w+", re.UNICODE)
 
 STAGES = ("routing", "schnell", "experte", "kritiker", "revision", "synthese",
-          "extraktion", "lektion", "korrektur", "richter")
+          "extraktion", "lektion", "korrektur", "richter", "mission", "bericht", "konsolidierung")
 
 
 # ------------------------------------------------------------------ Experten
@@ -1033,6 +1033,44 @@ def lesson_extraction_messages(question: str, answer: str, comment: str | None,
     return [_system("lektion", "system", body), {"role": "user", "content": user}]
 
 
+def consolidation_messages(memories: list[Memory], project: str | None) -> list[dict]:
+    """Stufe ``konsolidierung``: alte, unsichere KI-Erinnerungen zu einer Zusammenfassung verdichten (JSON)."""
+    body = (
+        "Du bist das Gedächtnis-Modul von OBITO. Du bekommst ältere, automatisch gemerkte Erinnerungen "
+        "mit geringer Wichtigkeit. Fasse das dauerhaft Nützliche in einer kompakten Zusammenfassung "
+        "zusammen (höchstens 600 Zeichen; nur gesicherte Fakten, Präferenzen und Entscheidungen; keine "
+        "Floskeln, nichts erfinden). „behalten“: IDs der Erinnerungen, die als eigenständiger Eintrag "
+        "erhalten bleiben sollen, weil sie präzise und wichtig sind – im Zweifel leer lassen."
+    )
+    lines = [f"#{getattr(m, 'id', '?')} [{_text(getattr(m, 'kind', 'notiz'))}] "
+             f"{clip(' '.join(_text(getattr(m, 'content', m)).split()), 300)}" for m in memories]
+    user = _join(
+        f"Projekt: {' '.join(str(project).split())}" if project else "Projekt: (allgemein)",
+        "Erinnerungen:\n" + "\n".join(lines),
+        _json_tail({"zusammenfassung": "Nutzer baut einen 5-Zoll-Quadcopter mit 4S-Akkus und bevorzugt "
+                                       "Carbon-Rahmen; Flight-Controller ist ein F7.",
+                    "behalten": [12]}),
+    )
+    return [_system("konsolidierung", "system", body), {"role": "user", "content": user}]
+
+
+def session_summary_messages(messages: list[dict]) -> list[dict]:
+    """Stufe ``konsolidierung``: einen langen Gesprächsverlauf in eine Erinnerung verdichten (Text)."""
+    body = (
+        "Du bist das Gedächtnis-Modul von OBITO. Fasse den folgenden Gesprächsverlauf in höchstens "
+        "800 Zeichen zusammen: Worum ging es, welche Entscheidungen und Ergebnisse gab es, was ist "
+        "offen. Nur Fakten aus dem Verlauf, nichts erfinden, Deutsch, Fließtext ohne Überschriften."
+    )
+    lines = []
+    for m in messages or ():
+        if not isinstance(m, dict):
+            continue
+        role = "Nutzer" if m.get("role") == "user" else "OBITO"
+        lines.append(f"{role}: {clip(' '.join(_text(m.get('content')).split()), 500)}")
+    user = "Gesprächsverlauf:\n" + "\n".join(lines) + "\n\nAntworte nur mit der Zusammenfassung."
+    return [_system("konsolidierung", "system", body), {"role": "user", "content": user}]
+
+
 def correction_rewrite_messages(question: str, answer: str, correction: str) -> list[dict]:
     """Stufe ``korrektur``: ursprüngliche Antwort mit eingearbeiteter Korrektur neu schreiben."""
     system = _system("korrektur", OMEGA.id, _join(OMEGA.system_prompt, BASE_RULES))
@@ -1153,6 +1191,15 @@ LESSON_SCHEMA: dict = {
         "allgemein": {"type": "boolean"},
     },
     "required": ["regel", "gilt_fuer", "allgemein"],
+}
+
+CONSOLIDATION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "zusammenfassung": {"type": "string"},
+        "behalten": {"type": "array", "items": {"type": "integer"}},
+    },
+    "required": ["zusammenfassung", "behalten"],
 }
 
 JUDGE_SCHEMA: dict = {
@@ -1449,6 +1496,33 @@ def parse_lesson(text: Any) -> dict | None:
                                                    "stichworte", "scope", default=[]), 60)]
     general = _to_bool(_get(d, "allgemein", "general", "generell", "global", "immer"), default=False)
     return {"regel": clip(rule, MAX_LESSON_CHARS), "gilt_fuer": topics, "allgemein": bool(general)}
+
+
+def parse_consolidation(text: Any, known_ids: Iterable[int] | None = None) -> dict | None:
+    """Normalisiert eine Konsolidierung: ``{"zusammenfassung", "behalten": [ids]}``; ohne Text ``None``."""
+    d = _dict(_load(text))
+    if d is None:
+        return None
+    summary = " ".join(_text(_get(d, "zusammenfassung", "summary", "text", "fazit")).split())
+    if not summary:
+        return None
+    keep_raw = _get(d, "behalten", "keep", "behalte", "erhalten", default=[])
+    if isinstance(keep_raw, bool):
+        keep_raw = []
+    elif isinstance(keep_raw, (int, float)):
+        keep_raw = [keep_raw]
+    elif isinstance(keep_raw, str):
+        keep_raw = re.findall(r"\d+", keep_raw)
+    known = {int(i) for i in known_ids} if known_ids is not None else None
+    ids: set[int] = set()
+    for x in keep_raw if isinstance(keep_raw, (list, tuple)) else []:
+        try:
+            i = int(str(x).strip().lstrip("#"))
+        except (TypeError, ValueError):
+            continue
+        if known is None or i in known:
+            ids.add(i)
+    return {"zusammenfassung": clip(summary, 800), "behalten": sorted(ids)}
 
 
 def parse_judge(text: Any) -> dict | None:

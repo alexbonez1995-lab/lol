@@ -869,6 +869,8 @@ def default_registry(workspace: str = ".", confirm: ConfirmCallback | None = Non
     reg = ToolRegistry(workspace, confirm, confirm_dangerous)
     for tool in _builtin_tools(reg):
         reg.register(tool)
+    from . import engineering  # Ingenieur-Rechner & Materialdaten (importiert tools.py selbst lazy)
+    engineering.register_tools(reg)
     return reg
 
 
@@ -1018,7 +1020,11 @@ _NEEDS_TOOLS_RE = re.compile(
     r"|\b(?:uhrzeit|datum|heute|wochentag|kalenderwoche|wie ?spät|wie ?spaet|zeit\b)"
     r"|\b(?:system\w*|betriebssystem|arbeitsspeicher|festplatte|prozessor|cpu|ram\b)"
     r"|\b(?:ausführ\w*|ausfuehr\w*|führe\s+\w*\s*aus|starte|skript|script|python|befehl|kommando|shell|terminal)"
-    r"|\b(?:merk\w*|erinner\w*|gedächtnis|gedaechtnis|vergiss)",
+    r"|\b(?:merk\w*|erinner\w*|gedächtnis|gedaechtnis|vergiss)"
+    # Ingenieur-Rechner, Materialdaten und Dokumente (Phase 2)
+    r"|\b(?:material\w*|werkstoff\w*|dichte|festigkeit|e-modul|zugfestigkeit|akku\w*|lipo|flugzeit|schub\w*"
+    r"|drehmoment|kabel\w*|awg|umrechn\w*|einheit\w*|spannungsteiler|durchbiegung|querschnitt|propeller"
+    r"|dokument\w*|datenzentrum|handbuch|datenblatt|unterlagen)",
     re.IGNORECASE,
 )
 

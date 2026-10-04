@@ -308,6 +308,52 @@ class MemoryStore:
             row = self._db.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()
         return self._row(row) if row else None
 
+    def list(self, *, project: str | None = None, any_project: bool = True, source: str | None = None,
+             kind: str | None = None, max_importance: float | None = None, older_than: float | None = None,
+             limit: int = 10000) -> list[Memory]:
+        """Erinnerungen filtern (für Pflege/Konsolidierung). ``any_project=False`` filtert exakt auf
+        ``project`` (``None`` = nur Erinnerungen ohne Projekt)."""
+        sql = "SELECT * FROM memories WHERE 1=1"
+        args: list = []
+        if not any_project:
+            sql += " AND project IS ?"
+            args.append(project)
+        if source is not None:
+            sql += " AND source = ?"
+            args.append(source)
+        if kind is not None:
+            sql += " AND kind = ?"
+            args.append(kind)
+        if max_importance is not None:
+            sql += " AND importance < ?"
+            args.append(float(max_importance))
+        if older_than is not None:
+            sql += " AND created_at < ?"
+            args.append(float(older_than))
+        sql += " ORDER BY created_at ASC, id ASC LIMIT ?"
+        args.append(int(limit))
+        with self._lock:
+            rows = self._db.execute(sql, args).fetchall()
+        return [self._row(r) for r in rows]
+
+    def sessions(self) -> list[dict]:
+        """Alle Sitzungen mit Nachrichtenzahl und Zeit der letzten Nachricht (neueste zuerst)."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT session_id, COUNT(*) AS n, MAX(created_at) AS letzte, MAX(project) AS project"
+                " FROM messages GROUP BY session_id ORDER BY letzte DESC"
+            ).fetchall()
+        return [{"session_id": r["session_id"], "nachrichten": r["n"], "letzte": r["letzte"],
+                 "project": r["project"]} for r in rows]
+
+    def meta(self, key: str) -> str | None:
+        with self._lock:
+            return self._meta(key)
+
+    def set_meta(self, key: str, value: str) -> None:
+        with self._lock:
+            self._set_meta(key, str(value))
+
     def recent(self, limit: int = 10, project: str | None = None) -> list[Memory]:
         sql = "SELECT * FROM memories"
         args: tuple = ()

@@ -18,20 +18,29 @@ Thread gerufen.
 from __future__ import annotations
 
 import json
+import shutil
+import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from . import agents
-from .agents import CRITIC_SCHEMA, EXPERTS, LESSON_SCHEMA, MEMORY_SCHEMA, ROUTING_SCHEMA, Expert
-from .config import Config
+from .agents import (CONSOLIDATION_SCHEMA, CRITIC_SCHEMA, EXPERTS, LESSON_SCHEMA, MEMORY_SCHEMA,
+                     ROUTING_SCHEMA, Expert)
+from .automation import AutomationStore, Scheduler
+from .config import Config, find_config_file, save_config
+from .knowledge import Chunk, KnowledgeStore
+from .knowledge import register_tools as register_knowledge_tools
 from .learning import Interaction, LearningStore, Lesson, keywords
 from .llm import (BackendUnavailable, ChatResult, LLMBackend, LLMError, ModelInfo, ModelNotFound,
                   StreamCallback, make_backend, parse_json)
 from .memory import Memory, MemoryStore, normalize
+from .missions import MissionRunner, MissionStore
+from .projects import ProjectStore
 from .tools import (ToolRegistry, ToolStreamFilter, default_registry, needs_tools, parse_tool_calls,
                     strip_tool_calls)
 
@@ -134,6 +143,7 @@ class Answer:
     interaction_id: int | None
     tokens: int
     duration: float
+    documents: list[Chunk] = field(default_factory=list)   # genutzte Dokument-Auszüge (Wissensbasis)
 
     def trace(self) -> str:
         """Lesbare Denk-Spur, eine Zeile je Schritt."""
@@ -163,6 +173,7 @@ class Answer:
             "erinnerungen_genutzt": [memory_to_dict(m) for m in self.memories_used],
             "erinnerungen_neu": [memory_to_dict(m) for m in self.new_memories],
             "werkzeuge": list(self.tools_used),
+            "dokumente": [c.to_dict() for c in self.documents],
             "spur": [s.to_dict() for s in self.steps],
             "interaktion_id": self.interaction_id,
             "tokens": self.tokens,
@@ -220,6 +231,8 @@ class _Run:
     memories: list[Memory] = field(default_factory=list)
     lessons: list[Lesson] = field(default_factory=list)
     new_memories: list[Memory] = field(default_factory=list)
+    documents: list[Chunk] = field(default_factory=list)
+    extra_context: str = ""          # Projektkontext + Dokument-Auszüge
     depth: str = "auto"
 
 
@@ -270,8 +283,7 @@ class Brain:
                  confirm: Callable[[str, dict], bool] | None = None):
         self.cfg = cfg
         self.backend: LLMBackend = backend if backend is not None else make_backend(cfg)
-        if memory is None or learning is None:
-            cfg.ensure_dirs()
+        cfg.ensure_dirs()
         self.memory: MemoryStore = memory if memory is not None else MemoryStore(cfg.memory_db)
         self.learning: LearningStore = learning if learning is not None else LearningStore(cfg.learning_db)
         if tools is None:
@@ -279,6 +291,15 @@ class Brain:
         elif confirm is not None:
             tools.set_policy(confirm, tools.confirm_dangerous)
         self.tools: ToolRegistry = tools
+        self._confirm = confirm if confirm is not None else getattr(tools, "confirm", None)
+        # Phase 2: Wissensbasis, Projekte, Missionen, Automationen
+        self.knowledge = KnowledgeStore(cfg.knowledge_db)
+        self.projects = ProjectStore(cfg.projects_db)
+        self.missions = MissionRunner(self, MissionStore(cfg.missions_db), confirm=None)
+        self.automation = Scheduler(self, AutomationStore(cfg.automation_db),
+                                    log_path=cfg.logs_dir / "automation.log", allow_dangerous=False,
+                                    tick_seconds=30)
+        register_knowledge_tools(self.tools, self.knowledge)
 
         # Embedder: echtes Backend immer, Fake nur wenn „oben“. Liefert das Backend None
         # (kein Embedding-Modell, Server weg), fällt die Suche auf Volltext zurück.
@@ -296,6 +317,7 @@ class Brain:
             set_le = getattr(self.learning, "set_embedder", None)
             if callable(set_le):
                 set_le(embedder)
+            self.knowledge.set_embedder(embedder)
         self.tools.set_memory(self.memory)
 
         self._ask_lock = threading.Lock()
@@ -418,9 +440,9 @@ class Brain:
         cfg = self.cfg
         try:
             self._check_cancel(run.cancel)
-            # 2. Erinnern
+            # 2. Erinnern (Gedächtnis, Lektionen, Beispiele, Projektkontext, Dokumente)
             history, examples = self._recall_stage(run)
-            context = agents.context_block(run.memories, run.lessons, run.project)
+            context = agents.context_block(run.memories, run.lessons, run.project, run.extra_context)
             # 3. Tiefe
             self._check_cancel(run.cancel)
             depth, hint, routing_tools = self._routing_stage(run, requested)
@@ -458,6 +480,7 @@ class Brain:
             experts=list(run.experts), critique=run.critique, memories_used=list(run.memories),
             new_memories=list(run.new_memories), lessons_used=list(run.lessons), tools_used=list(run.tools_used),
             steps=run.steps, interaction_id=None, tokens=tokens, duration=duration,
+            documents=list(run.documents),
         )
         # 9. Protokoll
         if learn is not False:
@@ -499,9 +522,32 @@ class Brain:
             examples = self.learning.examples(run.question, cfg.example_recall)
         except Exception as e:  # noqa: BLE001
             problems.append(f"Beispiele: {e}")
+        extra_parts: list[str] = []
+        project_context = False
+        if run.project:
+            try:
+                self.projects.ensure(run.project)
+                project_summary = self.projects.summary(run.project)
+                if project_summary:
+                    extra_parts.append("Projektkontext:\n" + project_summary)
+                    project_context = True
+            except Exception as e:  # noqa: BLE001
+                problems.append(f"Projekt: {e}")
+        try:
+            run.documents = self.knowledge.search(run.question, k=4, project=run.project)
+            if run.documents:
+                section = self.knowledge.context_section(run.question, k=4, max_chars=1500, project=run.project)
+                if section:
+                    extra_parts.append(section)
+        except Exception as e:  # noqa: BLE001
+            problems.append(f"Dokumente: {e}")
+        run.extra_context = "\n\n".join(extra_parts)
         summary = (f"{len(run.memories)} Erinnerungen, {len(run.lessons)} Lektionen, {len(examples)} Beispiele, "
-                   f"{len(history)} Verlaufsnachrichten")
-        detail_lines = [m.short() for m in run.memories] + [l.render() for l in run.lessons]
+                   f"{len(run.documents)} Dokument-Auszüge, {len(history)} Verlaufsnachrichten")
+        if project_context:
+            summary += ", Projektkontext"
+        detail_lines = ([m.short() for m in run.memories] + [l.render() for l in run.lessons]
+                        + [f"{c.cite()} {c.content[:120]}" for c in run.documents])
         if problems:
             summary += " – Fehler: " + "; ".join(problems)
             detail_lines.extend(problems)
@@ -854,6 +900,13 @@ class Brain:
                     continue
                 run.new_memories.append(m)
                 details.append(f"gemerkt: {m.short()}")
+                if run.project and m.kind == "entscheidung":
+                    try:
+                        self.projects.ensure(run.project)
+                        self.projects.add_note(run.project, "entscheidung", content[:80], content)
+                        details.append("Projektnotiz: Entscheidung festgehalten")
+                    except Exception as e:  # noqa: BLE001
+                        details.append(f"Projektnotiz fehlgeschlagen: {e}")
             n = len(run.new_memories)
             n_skipped = sum(skipped.values())
             if n:
@@ -1056,6 +1109,141 @@ class Brain:
     def export_dataset(self, path: str, **kw: Any) -> dict:
         return self.learning.export_dataset(path, **kw)
 
+    def set_dangerous_policy(self, allow: bool) -> None:
+        """Erlaubt (``True``) oder verbietet gefährliche Werkzeuge ohne Rückfrage – für Server und
+        Automationen. Werkzeuge im Chat fragen weiterhin über ``confirm`` nach, falls gesetzt."""
+        self.automation.allow_dangerous = bool(allow)
+        if allow:
+            self.tools.set_policy(lambda _name, _args: True, True)
+        else:
+            self.tools.set_policy(self._confirm, True)
+
+    # ------------------------------------------------------------ Pflege
+    def consolidate(self, days: int = 7, project: str | None = None) -> dict:
+        """Gedächtnis-Pflege: fasst alte, unsichere KI-Erinnerungen (``source == "ki"``,
+        Wichtigkeit < 0,3, älter als ``days`` Tage) je Projekt zu einer Zusammenfassung zusammen und
+        verdichtet lange Sitzungen (> 30 Nachrichten) zu je einer ``zusammenfassung``-Erinnerung.
+        Nutzer-Erinnerungen werden nie angefasst."""
+        cfg = self.cfg
+        cutoff = time.time() - max(0, int(days)) * 86400
+        result = {"zusammengefasst": 0, "geloescht": 0, "sitzungen": 0, "fehler": []}
+        candidates = self.memory.list(source="ki", max_importance=0.3, older_than=cutoff)
+        if project is not None:
+            candidates = [m for m in candidates if m.project == project]
+        groups: dict[str | None, list[Memory]] = {}
+        for m in candidates:
+            if m.kind == "zusammenfassung":
+                continue
+            groups.setdefault(m.project, []).append(m)
+        for proj, mems in groups.items():
+            if len(mems) < 3:
+                continue
+            batch = mems[:40]
+            known = [m.id for m in batch]
+            try:
+                outcome = self._json_call(
+                    "konsolidierung", agents.consolidation_messages(batch, proj), CONSOLIDATION_SCHEMA,
+                    lambda t, known=known: agents.parse_consolidation(t, known), model=cfg.routing_model,
+                    max_tokens=max(cfg.max_tokens_json, 600),
+                )
+            except LLMError as e:
+                result["fehler"].append(f"{proj or 'allgemein'}: {e}")
+                continue
+            value = outcome.value if isinstance(outcome.value, dict) else None
+            if not value:
+                result["fehler"].append(f"{proj or 'allgemein'}: keine verwertbare Zusammenfassung")
+                continue
+            keep = set(value.get("behalten") or [])
+            self.memory.remember(value["zusammenfassung"], kind="zusammenfassung", project=proj, source="ki",
+                                 importance=0.5, tags=["konsolidierung"])
+            for m in batch:
+                if m.id not in keep and self.memory.forget(m.id):
+                    result["geloescht"] += 1
+            result["zusammengefasst"] += 1
+        # Lange Sitzungen verdichten
+        for sess in self.memory.sessions():
+            n = int(sess["nachrichten"])
+            if n <= 30:
+                continue
+            if project is not None and sess.get("project") != project:
+                continue
+            key = f"session_summary:{sess['session_id']}"
+            try:
+                done_at = int(self.memory.meta(key) or 0)
+            except ValueError:
+                done_at = 0
+            if n - done_at <= 30:
+                continue
+            messages = self.memory.history(sess["session_id"], 60)
+            try:
+                res = self._chat(agents.session_summary_messages(messages), max_tokens=cfg.max_tokens_json,
+                                 model=cfg.routing_model, temperature=0.2)
+            except LLMError as e:
+                result["fehler"].append(f"Sitzung {sess['session_id']}: {e}")
+                continue
+            text = " ".join((res.text or "").split())
+            if len(text) < 20:
+                result["fehler"].append(f"Sitzung {sess['session_id']}: leere Zusammenfassung")
+                continue
+            self.memory.remember(text[:800], kind="zusammenfassung", project=sess.get("project"), source="ki",
+                                 importance=0.5, tags=["sitzung", str(sess["session_id"])])
+            self.memory.set_meta(key, str(n))
+            result["sitzungen"] += 1
+        return result
+
+    def backup(self, keep: int = 7) -> Path:
+        """Sichert alle Datenbanken (SQLite-Online-Backup), das Gedächtnis als JSON und die
+        Konfiguration nach ``backups/<JJJJMMTT-HHMMSS>/``; behält die ``keep`` neuesten Sicherungen."""
+        cfg = self.cfg
+        cfg.ensure_dirs()
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        target = cfg.backups_dir / stamp
+        n = 2
+        while target.exists():
+            target = cfg.backups_dir / f"{stamp}-{n}"
+            n += 1
+        target.mkdir(parents=True)
+        files: list[str] = []
+        stores = {
+            "gedaechtnis.db": self.memory, "lernen.db": self.learning, "wissen.db": self.knowledge,
+            "projekte.db": self.projects, "missionen.db": self.missions.store, "automationen.db": self.automation.store,
+        }
+        for name, store in stores.items():
+            conn = getattr(store, "_db", None)
+            lock = getattr(store, "_lock", None)
+            if conn is None:
+                continue
+            dest = sqlite3.connect(str(target / name))
+            try:
+                if lock is not None:
+                    with lock:
+                        conn.backup(dest)
+                else:
+                    conn.backup(dest)
+            finally:
+                dest.close()
+            files.append(name)
+        self.memory.export(target / "gedaechtnis.json")
+        files.append("gedaechtnis.json")
+        src_cfg = find_config_file()
+        if src_cfg is not None:
+            shutil.copy2(src_cfg, target / "config.quelle.json")
+            files.append("config.quelle.json")
+        save_config(cfg, target / "config.json")
+        files.append("config.json")
+        manifest = {
+            "zeit": _iso(time.time()), "version": "4.0.0", "dateien": files,
+            "gedaechtnis": self.memory.stats(), "lernen": self.learning.stats(),
+            "wissen": self.knowledge.stats(), "projekte": self.projects.stats(),
+        }
+        (target / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Alte Sicherungen entfernen
+        keep = max(1, int(keep))
+        folders = sorted(p for p in cfg.backups_dir.iterdir() if p.is_dir() and (p / "manifest.json").exists())
+        for old in folders[:-keep]:
+            shutil.rmtree(old, ignore_errors=True)
+        return target
+
     # ------------------------------------------------------------ Status
     def status(self) -> dict:
         cfg = self.cfg
@@ -1083,17 +1271,39 @@ class Brain:
                 "modell": mem_stats.get("embedding_modell", ""),
                 "dim": mem_stats.get("embedding_dim", 0),
             },
+            "wissen": self.knowledge.stats(),
+            "projekte": self.projects.stats(),
+            "missionen": {"laufend": self.missions.running(), "anzahl": len(self.missions.store.list())},
+            "automationen": {**self.automation.store.stats(), "aktiv": bool(self.automation.running)},
         }
 
     def close(self) -> None:
-        """Schließt Gedächtnis und Lern-Speicher (idempotent)."""
+        """Schließt alle Speicher und stoppt den Zeitplaner (idempotent)."""
         if self._closed:
             return
         self._closed = True
-        try:
-            self.memory.close()
-        finally:
-            self.learning.close()
+        errors: list[Exception] = []
+
+        def _call(obj: Any, method: str) -> None:
+            fn = getattr(obj, method, None)
+            if callable(fn):
+                fn()
+
+        for action in (
+            lambda: _call(self.automation, "stop"),
+            lambda: _call(getattr(self.automation, "store", None), "close"),
+            lambda: _call(getattr(self.missions, "store", None), "close"),
+            lambda: _call(self.projects, "close"),
+            lambda: _call(self.knowledge, "close"),
+            lambda: self.memory.close(),
+            lambda: self.learning.close(),
+        ):
+            try:
+                action()
+            except Exception as e:  # noqa: BLE001 – alle Speicher trotzdem schließen
+                errors.append(e)
+        if errors:
+            raise errors[0]
 
 
 __all__ = [

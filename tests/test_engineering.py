@@ -637,8 +637,9 @@ class ToolsTest(unittest.TestCase):
     def test_coexists_with_default_registry(self):
         reg = default_registry(".")
         before = len(reg.list())
-        register_tools(reg)
-        self.assertEqual(len(reg.list()), before + 12)
+        self.assertTrue(all(reg.get(n) is not None for n in TOOL_NAMES))   # schon über default_registry dabei
+        register_tools(reg)                                                  # erneut registrieren ist idempotent
+        self.assertEqual(len(reg.list()), before)
         self.assertTrue(reg.run("rechnen", {"ausdruck": "1+1"}).ok)
         desc = reg.describe()
         self.assertIn("- akku_rechner(zellen, mah, strom_a?, c_rate?):", desc)
