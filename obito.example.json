@@ -1,0 +1,27 @@
+{
+  "_hinweis": "Kopiere diese Datei nach obito.json (oder ~/.obito/config.json) und passe sie an. Jedes Feld kann auch per Umgebungsvariable OBITO_<FELD> gesetzt werden, z. B. OBITO_MODEL=qwen2.5:14b.",
+
+  "backend": "auto",
+  "base_url": "",
+  "model": "qwen2.5:7b",
+  "fast_model": "qwen2.5:1.5b",
+  "embed_model": "nomic-embed-text",
+
+  "depth": "auto",
+  "experts_per_question": 5,
+  "max_revision_rounds": 1,
+  "max_tool_rounds": 4,
+  "max_history": 12,
+  "memory_recall": 6,
+  "example_recall": 3,
+  "temperature": 0.4,
+  "timeout": 300,
+
+  "allow_tools": true,
+  "confirm_dangerous": true,
+  "auto_memory": true,
+  "workspace": ".",
+
+  "server_host": "127.0.0.1",
+  "server_port": 8765
+}
