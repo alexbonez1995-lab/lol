@@ -24,6 +24,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Sequence, TextIO
 
+from . import cli_extra
 from .brain import Answer, Brain, Step
 from .config import Config, find_config_file, load_config, save_config
 from .learning import LearningStore
@@ -184,6 +185,18 @@ class ChatSession:
         (("werkzeuge",), "cmd_tools", "/werkzeuge", "verfügbare Werkzeuge"),
         (("status",), "cmd_status", "/status", "Systemstatus"),
         (("export",), "cmd_export", "/export [pfad]", "Trainingsdatensatz exportieren"),
+        (("dokument",), "cmd_document", "/dokument <pfad>", "Datei oder Ordner ins Datenzentrum aufnehmen"),
+        (("dokumente",), "cmd_documents", "/dokumente [frage]", "Dokumente zeigen oder durchsuchen"),
+        (("aufgabe",), "cmd_task", "/aufgabe <text>", "Aufgabe im aktuellen Projekt notieren"),
+        (("entscheidung",), "cmd_decision", "/entscheidung <text>", "Entscheidung im aktuellen Projekt festhalten"),
+        (("projektinfo",), "cmd_project_info", "/projektinfo", "Zusammenfassung und Notizen des Projekts"),
+        (("mission",), "cmd_mission", "/mission <ziel>", "Mission planen und ausführen"),
+        (("missionen",), "cmd_missions", "/missionen", "Missionen zeigen"),
+        (("automationen",), "cmd_automations", "/automationen", "Automationen zeigen"),
+        (("material",), "cmd_material", "/material <name>", "Materialdaten (Richtwerte) zeigen"),
+        (("rechner",), "cmd_calculator", "/rechner [name k=v …]", "Ingenieur-Rechner (ohne Argument: Liste)"),
+        (("backup",), "cmd_backup", "/backup", "Sicherung aller Daten anlegen"),
+        (("konsolidieren",), "cmd_consolidate", "/konsolidieren [tage]", "Gedächtnis-Pflege: alte KI-Erinnerungen verdichten"),
         (("beenden", "exit", "quit", "q"), "cmd_quit", "/beenden", "OBITO verlassen"),
     )
 
@@ -477,7 +490,13 @@ class ChatSession:
             self._print("Projekt gelöscht – Fragen laufen ohne Projektbezug.")
             return True
         self.project = arg
-        self._print(f"Projekt: {self.project}")
+        created = False
+        try:
+            created = self.brain.projects.get(arg) is None
+            self.brain.projects.ensure(arg)
+        except Exception as e:  # noqa: BLE001
+            self._print(f"{SYM_WARN} Projektsystem: {e}")
+        self._print(f"Projekt: {self.project}" + (" (neu angelegt)" if created else ""))
         return True
 
     def _set_depth(self, depth: str) -> bool:
@@ -675,6 +694,192 @@ class ChatSession:
     def cmd_quit(self, arg: str) -> bool:
         self._print("Bis bald.")
         return False
+
+    # ------------------------------------------------------------ Phase 2
+    def cmd_document(self, arg: str) -> bool:
+        if not arg:
+            self._print("Aufruf: /dokument <pfad>")
+            return True
+        path = Path(arg).expanduser()
+        if not path.exists():
+            self._print(f"{SYM_FAIL} {arg} nicht gefunden.")
+            return True
+        try:
+            if path.is_dir():
+                r = self.brain.knowledge.add_directory(path, project=self.project)
+                self._print(f"{r['hinzugefuegt']} hinzugefügt, {r['unveraendert']} unverändert, "
+                            f"{len(r['uebersprungen'])} übersprungen, {len(r['fehler'])} Fehler.")
+            else:
+                doc = self.brain.knowledge.add_file(path, project=self.project)
+                self._print(f"Indexiert: {cli_extra.fmt_document(doc)}")
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+        return True
+
+    def cmd_documents(self, arg: str) -> bool:
+        store = self.brain.knowledge
+        if arg:
+            hits = store.search(arg, k=5, project=self.project)
+            if not hits:
+                self._print("Keine Treffer in den Dokumenten.")
+                return True
+            for c in hits:
+                self._print(f"{c.cite()} (Score {c.score:.2f})")
+                self._print("  " + " ".join(c.content.split())[:300])
+            return True
+        docs = store.list(self.project)
+        if not docs:
+            self._print("Noch keine Dokumente. /dokument <pfad> nimmt Dateien oder Ordner auf.")
+            return True
+        for d in docs:
+            self._print("  " + cli_extra.fmt_document(d))
+        return True
+
+    def _project_note(self, kind: str, arg: str, usage: str) -> bool:
+        if not arg:
+            self._print(f"Aufruf: {usage}")
+            return True
+        if not self.project:
+            self._print("Kein Projekt gesetzt – zuerst /projekt <name>.")
+            return True
+        try:
+            self.brain.projects.ensure(self.project)
+            note = self.brain.projects.add_note(self.project, kind, arg[:80], arg)
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        self._print(f"Festgehalten: {cli_extra.fmt_note(note)}")
+        return True
+
+    def cmd_task(self, arg: str) -> bool:
+        return self._project_note("aufgabe", arg, "/aufgabe <text>")
+
+    def cmd_decision(self, arg: str) -> bool:
+        return self._project_note("entscheidung", arg, "/entscheidung <text>")
+
+    def cmd_project_info(self, arg: str) -> bool:
+        name = arg or self.project
+        if not name:
+            self._print("Kein Projekt gesetzt – /projekt <name> oder /projektinfo <name>.")
+            return True
+        p = self.brain.projects.get(name)
+        if p is None:
+            self._print(f"Projekt »{name}« unbekannt.")
+            return True
+        self._print(cli_extra.fmt_project(p))
+        summary = self.brain.projects.summary(name)
+        if summary:
+            self._print(summary)
+        for n in self.brain.projects.notes(name, limit=20):
+            self._print("  " + cli_extra.fmt_note(n))
+        return True
+
+    def cmd_mission(self, arg: str) -> bool:
+        if not arg:
+            self._print("Aufruf: /mission <ziel>")
+            return True
+        try:
+            m = self.brain.missions.plan(arg, project=self.project)
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        self._print(cli_extra.fmt_mission(m, verbose=True))
+        if m.error:
+            self._print(f"{SYM_WARN} {m.error}")
+        try:
+            answer = self.inp("Starten? [J/n] ")
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+        if not _yes(answer, True):
+            self._print(f"Geplant, nicht gestartet – später: python -m obito mission start {m.id}")
+            return True
+        self.cancel_event.clear()
+        try:
+            m = cli_extra.run_mission_foreground(self.brain, m.id, self.out, cancel=self.cancel_event)
+        except (ValueError, RuntimeError) as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        self._print(cli_extra.fmt_mission(m, verbose=True))
+        return True
+
+    def cmd_missions(self, arg: str) -> bool:
+        missions = self.brain.missions.store.list()
+        if not missions:
+            self._print("Keine Missionen. /mission <ziel> plant eine neue.")
+            return True
+        running = set(self.brain.missions.running())
+        for m in missions:
+            self._print("  " + cli_extra.fmt_mission(m) + ("  (läuft)" if m.id in running else ""))
+        return True
+
+    def cmd_automations(self, arg: str) -> bool:
+        items = self.brain.automation.store.list()
+        if not items:
+            self._print("Keine Automationen. Einrichten: python -m obito automation vorschlaege --installieren")
+            return True
+        for a in items:
+            self._print("  " + cli_extra.fmt_automation(a))
+        self._print("Der Zeitplaner läuft nur mit `python -m obito serve`"
+                    + (" – aktiv." if self.brain.automation.running else "."))
+        return True
+
+    def cmd_material(self, arg: str) -> bool:
+        from . import engineering
+        if not arg:
+            self._print("Aufruf: /material <name>  (z. B. CFK, Alu 7075, PETG). Bekannt: "
+                        + ", ".join(sorted(engineering.MATERIALS)))
+            return True
+        if engineering.find_material(arg) is None:
+            self._print(f"Unbekanntes Material »{arg}«. Bekannt: " + ", ".join(sorted(engineering.MATERIALS)))
+            return True
+        self._print(engineering.material_info(arg))
+        return True
+
+    def cmd_calculator(self, arg: str) -> bool:
+        from . import engineering
+        tokens = arg.split()
+        if not tokens:
+            self._print("Rechner (Aufruf: /rechner <name> schluessel=wert …):")
+            for name in engineering.TOOL_NAMES:
+                t = self.brain.tools.get(name)
+                if t is None:
+                    continue
+                props = t.parameters.get("properties", {})
+                req = set(t.parameters.get("required", []))
+                self._print(f"  {name}(" + ", ".join(f"{k}{'' if k in req else '?'}" for k in props) + ")")
+            return True
+        name, params = tokens[0], tokens[1:]
+        if self.brain.tools.get(name) is None:
+            self._print(f"Unbekannter Rechner »{name}« – /rechner zeigt die Liste.")
+            return True
+        try:
+            kv = cli_extra._parse_kv(params)
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        res = self.brain.tools.run(name, kv)
+        self._print(res.output if res.ok else f"{SYM_FAIL} {res.error}")
+        return True
+
+    def cmd_backup(self, arg: str) -> bool:
+        try:
+            target = self.brain.backup()
+        except OSError as e:
+            self._print(f"{SYM_FAIL} Sicherung fehlgeschlagen: {e}")
+            return True
+        self._print(f"Sicherung angelegt: {target}")
+        return True
+
+    def cmd_consolidate(self, arg: str) -> bool:
+        days = self._parse_count(arg, 7)
+        if days is None:
+            self._print("Aufruf: /konsolidieren [tage]")
+            return True
+        r = self.brain.consolidate(days=days, project=self.project)
+        self._print(f"Konsolidiert: {r['zusammengefasst']} Gruppen zusammengefasst, {r['geloescht']} Erinnerungen "
+                    f"verdichtet, {r['sitzungen']} Sitzungen zusammengefasst"
+                    + (f"; Fehler: {'; '.join(r['fehler'])}" if r.get("fehler") else "."))
+        return True
 
     # ------------------------------------------------------------ Hilfen
     def _parse_id(self, arg: str, usage: str) -> int | None:
@@ -1442,6 +1647,8 @@ def cmd_serve(cfg: Config, args: argparse.Namespace, out: TextIO, backend: LLMBa
         shown_host = f"[{host}]" if ":" in host else host
         _println(out, f"OBITO-HUD: http://{shown_host}:{server.port}/  (Strg+C beendet)"
                       + ("  – gefährliche Werkzeuge FREIGEGEBEN" if args.gefaehrlich_erlauben else ""))
+        if server.start_background():
+            _println(out, "Automations-Zeitplaner läuft.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:
@@ -1514,7 +1721,10 @@ def build_parser() -> argparse.ArgumentParser:
                "  python -m obito                      Chat\n"
                "  python -m obito doctor               Systemprüfung\n"
                "  python -m obito serve                HUD im Browser (http://127.0.0.1:8765)\n"
-               "  python -m obito config --empfehlen 8 Konfigurationsvorlage für 8 GB VRAM",
+               "  python -m obito config --empfehlen 8 Konfigurationsvorlage für 8 GB VRAM\n"
+               "  python -m obito wissen add doku.pdf  Dokument ins Datenzentrum\n"
+               "  python -m obito mission neu \"…\"      Mehrstufige Aufgabe planen\n"
+               "  python -m obito rechner akku_rechner zellen=4 mah=1500 strom_a=20",
     )
     _germanize(parser)
     _add_global_options(parser, suppress=False)
@@ -1594,6 +1804,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--schreiben", default=None, metavar="PFAD", help="Konfiguration (oder Vorlage) in diese Datei schreiben")
     p.add_argument("--empfehlen", default=None, type=float, metavar="VRAM_GB",
                    help="Vorlage nach Grafikspeicher: <8 (CPU), 8, 12 oder 16 GB")
+
+    cli_extra.add_parsers(add, _germanize, _add_global_options, _Formatter)
     return parser
 
 
@@ -1662,6 +1874,8 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None, inp: C
             return cmd_memory(cfg, args, out, backend=backend)
         if cmd == "config":
             return cmd_config(cfg, args, out, config_file)
+        if cmd in cli_extra.COMMANDS:
+            return cli_extra.run(cmd, cfg, args, out, inp, backend)
     except LLMError as e:
         _println(out, f"Fehler: {e}")
         return 1
