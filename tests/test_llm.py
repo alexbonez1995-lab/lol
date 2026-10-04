@@ -116,8 +116,13 @@ class FakeBackendTest(unittest.TestCase):
         self.assertTrue(fb.has_model("llama3.2:3b"))
         self.assertTrue(fb.has_model("llama3.2"))
         self.assertFalse(fb.has_model("qwen2.5:7b"))
-        self.assertTrue(fb.pull("qwen2.5:7b"))
+        seen = []
+        self.assertTrue(fb.pull("qwen2.5:7b", progress=seen.append))
+        self.assertEqual(seen[-1]["status"], "success")
         self.assertTrue(fb.has_model("qwen2.5:7b"))
+        self.assertTrue(fb.delete("qwen2.5:7b"))
+        self.assertFalse(fb.delete("qwen2.5:7b"))
+        self.assertFalse(fb.has_model("qwen2.5:7b"))
         self.assertEqual(fb.list_models()[0].short(), "llama3.2:3b")
 
     def test_down(self):
@@ -173,6 +178,15 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps({"data": [{"id": "lokal-modell"}]}).encode())
         else:
             self._send(404, b"{}")
+
+    def do_DELETE(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(n) or b"{}")
+        _Handler.log.append((self.path, body))
+        if self.path == "/api/delete" and body.get("model") == "qwen2.5:7b":
+            self._send(200, b"{}")
+        else:
+            self._send(404, json.dumps({"error": "model not found"}).encode())
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -262,6 +276,8 @@ class HttpBackendsTest(unittest.TestCase):
         self.assertEqual(r.completion_tokens, 2)
 
         self.assertEqual(b.version(), "0.12.0")
+        self.assertTrue(b.delete("qwen2.5:7b"))
+        self.assertFalse(b.delete("gibtsnicht"))
         self.assertEqual(b.running()[0]["size_vram"], 4_000_000_000)
         self.assertIn("thinking", b.show("qwen2.5:7b")["capabilities"])
         self.assertEqual(b.info()["version"], "0.12.0")

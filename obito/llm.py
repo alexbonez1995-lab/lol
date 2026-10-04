@@ -240,6 +240,10 @@ class LLMBackend:
     def pull(self, name: str, progress: Callable[[dict], None] | None = None) -> bool:
         return False
 
+    def delete(self, name: str) -> bool:
+        """Löscht ein installiertes Modell – ``False``, wenn nicht unterstützt oder unbekannt."""
+        return False
+
     def running(self) -> list[dict]:
         """Geladene Modelle (Ollama: ``/api/ps``) – leer, wenn nicht unterstützt."""
         return []
@@ -433,6 +437,14 @@ class OllamaBackend(LLMBackend):
             if chunk.get("status") == "success":
                 ok = True
         return ok
+
+    def delete(self, name: str) -> bool:
+        """Löscht ein installiertes Modell (``DELETE /api/delete``)."""
+        try:
+            _request("DELETE", self._url("/api/delete"), {"model": name}, 60)
+            return True
+        except ModelNotFound:
+            return False
 
     def running(self) -> list[dict]:
         try:
@@ -656,8 +668,17 @@ class FakeBackend(LLMBackend):
         return [ModelInfo(name=m) for m in self.models]
 
     def pull(self, name, progress=None) -> bool:
+        if progress:
+            progress({"status": "pulling", "completed": 1, "total": 2})
+            progress({"status": "success"})
         self.models.append(name)
         return True
+
+    def delete(self, name) -> bool:
+        if name in self.models:
+            self.models.remove(name)
+            return True
+        return False
 
     def version(self) -> str | None:
         return "fake"

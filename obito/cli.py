@@ -47,6 +47,8 @@ SYM_GOOD = "👍"
 SYM_BAD = "👎"
 
 ABORT_TEXT = "Modellfehler: Abgebrochen"
+# Anfänge der Fehler-Antworten des Denkkerns (Brain._error_answer) – erscheinen auch als System-Step
+ERROR_ANSWER_PREFIXES = ("Modellfehler:", "Modell-Server nicht erreichbar", "Modell »")
 
 # Grobe Ausgabe-Token je Stufe für die Zeitprognose in ``doctor`` (sequenzielle Aufrufe)
 EXPERT_TOKENS = 450
@@ -236,6 +238,13 @@ class ChatSession:
     def on_step(self, step: Step) -> None:
         if not self.show_progress:
             return
+        if step.status == "fehler":
+            # Den abschließenden Fehler-Step des Denkkerns zeigt ``_show_answer`` als Antwort;
+            # nach einem Abbruch durch den Nutzer sind die Folgefehler der Stufen nur Rauschen.
+            if step.stage == "system" and step.summary.startswith(ERROR_ANSWER_PREFIXES):
+                return
+            if self.cancel_event.is_set():
+                return
         self._end_stream_line()
         self._print(step_line(step))
 
@@ -270,6 +279,7 @@ class ChatSession:
         self.cancel_event = cancel
         self._stream_open = False
         box: dict[str, Any] = {}
+        done = threading.Event()
 
         def work() -> None:
             try:
@@ -279,15 +289,20 @@ class ChatSession:
                 )
             except BaseException as e:  # noqa: BLE001 – im Thread darf nichts unbemerkt verloren gehen
                 box["error"] = e
+            finally:
+                done.set()
 
+        # Bewusst kein ``Thread.join(timeout)``: wird es von Strg+C unterbrochen, markiert CPython den
+        # noch laufenden Thread als beendet. Ein eigenes Event ist davon nicht betroffen.
         worker = threading.Thread(target=work, name="obito-chat-frage", daemon=True)
         interrupts = 0
-        self._waiting.set()
+        worker.start()
         try:
-            worker.start()
-            while worker.is_alive():
+            while True:
                 try:
-                    worker.join(0.1)
+                    self._waiting.set()          # ab hier fängt die Schleife Strg+C ab
+                    if done.wait(0.1):
+                        break
                 except KeyboardInterrupt:
                     interrupts += 1
                     if interrupts == 1:
@@ -769,6 +784,7 @@ def doctor(cfg: Config, *, training: bool = False, out: TextIO = sys.stdout, bac
 
     # Modelle
     installed: list[str] = []
+    model_ok = True
     if available:
         try:
             installed = [m.name for m in backend.list_models()]
@@ -783,9 +799,13 @@ def doctor(cfg: Config, *, training: bool = False, out: TextIO = sys.stdout, bac
 
         if cfg.model and has(cfg.model):
             ok(f"Hauptmodell {cfg.model} installiert")
+        elif cfg.model and not installed:
+            info(f"Hauptmodell {cfg.model}: Installation nicht prüfbar (Modellliste leer) – der Probeaufruf entscheidet.")
         elif cfg.model:
+            model_ok = False
             fail(f"Hauptmodell {cfg.model} fehlt – `ollama pull {cfg.model}`")
         else:
+            model_ok = False
             fail("Kein Hauptmodell konfiguriert (model).")
         if cfg.fast_model:
             if has(cfg.fast_model):
@@ -958,6 +978,7 @@ def doctor(cfg: Config, *, training: bool = False, out: TextIO = sys.stdout, bac
             info("Installation: pip install " + " ".join(missing) + "  (NVIDIA-GPU mit CUDA empfohlen; unter Windows WSL2)")
         _doctor_vram(ok, warn, info)
 
+    chat_possible = chat_possible and model_ok
     say("=" * 60)
     say("Ergebnis: " + ("Chat möglich." if chat_possible else "Chat nicht möglich – siehe [FEHLER] oben."))
     return 0 if chat_possible else 1
@@ -1330,7 +1351,7 @@ def cmd_eval(cfg: Config, args: argparse.Namespace, out: TextIO, backend: LLMBac
             report = ev.run_eval(backend, model, items, judge_model=args.richter, system_prompt=system_prompt,
                                  progress=progress, exclude_ids=frozenset(exclude), num_ctx=cfg.num_ctx)
     except BackendUnavailable as e:
-        _println(out, f"Fehler: {e}")
+        _println(out, f"Fehler: Modell-Server nicht erreichbar – {e}")
         return 1
     except LLMError as e:
         _println(out, f"Fehler beim Eval: {e}")
