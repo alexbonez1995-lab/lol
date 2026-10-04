@@ -83,6 +83,26 @@ class Config:
         return self.data_path / "lernen.db"
 
     @property
+    def knowledge_db(self) -> Path:
+        return self.data_path / "wissen.db"
+
+    @property
+    def projects_db(self) -> Path:
+        return self.data_path / "projekte.db"
+
+    @property
+    def missions_db(self) -> Path:
+        return self.data_path / "missionen.db"
+
+    @property
+    def automation_db(self) -> Path:
+        return self.data_path / "automationen.db"
+
+    @property
+    def backups_dir(self) -> Path:
+        return self.data_path / "backups"
+
+    @property
     def datasets_dir(self) -> Path:
         return self.data_path / "datensaetze"
 
@@ -99,7 +119,7 @@ class Config:
         return self.fast_model or self.model
 
     def ensure_dirs(self) -> None:
-        for p in (self.data_path, self.datasets_dir, self.models_dir, self.logs_dir):
+        for p in (self.data_path, self.datasets_dir, self.models_dir, self.logs_dir, self.backups_dir):
             p.mkdir(parents=True, exist_ok=True)
 
     def to_dict(self) -> dict:
