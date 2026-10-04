@@ -523,7 +523,9 @@ class Brain:
         heuristic = agents.heuristic_complexity(run.question)
         routing: dict | None = None
         outcome: _JsonOutcome | None = None
-        if heuristic == "mittel" or cfg.fast_model:
+        # Modell-Routing für alles außer eindeutig einfachen Fragen: bei komplexen Fragen entscheidet
+        # die Expertenwahl über die Qualität, ein kleiner JSON-Aufruf fällt dort nicht ins Gewicht.
+        if heuristic != "einfach" or cfg.fast_model:
             outcome = self._json_call(
                 "routing", agents.routing_messages(run.question, None), ROUTING_SCHEMA,
                 lambda t: agents.parse_routing(t, EXPERTS.keys()), model=cfg.routing_model,

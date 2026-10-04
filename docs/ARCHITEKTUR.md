@@ -355,7 +355,8 @@ Ablauf `ask` (verbindlich):
    Step `erinnern`.
 3. Tiefe: `depth or cfg.depth`. Bei `auto`: `h = heuristic_complexity(question)`; LLM-Routing
    (`_json_call("routing", …, model=cfg.routing_model, max_tokens=cfg.max_tokens_json)`) **nur** wenn
-   `h == "mittel"` oder `cfg.fast_model` gesetzt; Fallback = Heuristik. einfach→`schnell`,
+   `h != "einfach"` oder `cfg.fast_model` gesetzt (einfache Fragen sparen den Aufruf; bei mittleren
+   und komplexen Fragen entscheidet die Expertenwahl über die Qualität); Fallback = Heuristik. einfach→`schnell`,
    mittel→`mittel`, komplex→`tief`. `hint` = Experten aus dem Routing. Step `routing`.
 4. Werkzeugblock: nur wenn `cfg.allow_tools` und (`needs_tools(question, history)` oder
    Routing `werkzeuge=True`) → `tools.describe(compact=True)`.

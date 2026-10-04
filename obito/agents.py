@@ -526,8 +526,14 @@ def _keyword_scores(question: str) -> dict[str, float]:
             k = _fold(kw).strip()
             if not k:
                 continue
-            # kurze Schlüsselwörter (pla, abs, alu …) nur als ganzes Wort, längere als Wortanfang
-            pattern = r"(?<![a-z0-9])" + re.escape(k) + (r"(?![a-z0-9])" if len(k) <= 4 else "")
+            # kurze Schlüsselwörter (pla, abs, alu …) nur als ganzes Wort, mittlere als Wortanfang,
+            # lange auch im Wortinneren – deutsche Komposita: "Drohnenrahmen", "Motorhalterung"
+            if len(k) <= 4:
+                pattern = r"(?<![a-z0-9])" + re.escape(k) + r"(?![a-z0-9])"
+            elif len(k) == 5:
+                pattern = r"(?<![a-z0-9])" + re.escape(k)
+            else:
+                pattern = re.escape(k)
             if re.search(pattern, folded):
                 score += 1.0 + min(len(k), 20) / 20.0
         if score > 0:
