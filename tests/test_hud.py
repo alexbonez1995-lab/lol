@@ -9,6 +9,7 @@ die SSE-Ereignisnamen und die deutschen Kernelemente. Zusätzlich wird die Datei
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -280,3 +281,51 @@ class HudServedTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HudPhase2Test(unittest.TestCase):
+    """Phase 2: Tab-Leiste und die Ansichten Projekte, Datenzentrum, Missionen, Automationen, Modelle."""
+
+    @classmethod
+    def setUpClass(cls):
+        from obito.server import INDEX_PATH
+        cls.html = INDEX_PATH.read_text(encoding="utf-8")
+
+    def test_tabs_present(self):
+        for label in ("Übersicht", "Projekte", "Datenzentrum", "Missionen", "Automationen", "Modelle"):
+            self.assertIn(">" + label, self.html)
+        for view in ("uebersicht", "projekte", "daten", "missionen", "automationen", "modelle"):
+            self.assertIn('id="view-' + view + '"', self.html)
+
+    def test_phase2_api_paths_referenced(self):
+        for path in ("/api/projekte", "/api/notizen/", "/api/dokumente", "/api/dokumente/suche", "/api/dokumente/sync",
+                     "/api/missionen", "/api/automationen", "/api/automationen/vorschlaege", "/api/modell",
+                     "/api/modelle/pull", "/api/modelle/"):
+            self.assertIn(path, self.html, path)
+
+    def test_phase2_protocol_details(self):
+        self.assertIn("ev === 'fortschritt'", self.html)
+        self.assertIn("/api/missionen/' + id + '/' + path", self.html)
+        self.assertIn("answer.dokumente", self.html)
+        self.assertIn("encodeURIComponent(name)", self.html)
+        self.assertIn("window.OBITO", self.html)
+
+    def test_second_script_syntax(self):
+        import re
+        import shutil
+        import subprocess
+        import tempfile
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node nicht installiert")
+        scripts = re.findall(r"<script>(.*?)</script>", self.html, re.S)
+        self.assertEqual(len(scripts), 2)
+        for sc in scripts:
+            with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+                fh.write(sc)
+                path = fh.name
+            try:
+                res = subprocess.run([node, "--check", path], capture_output=True, text=True, timeout=30)
+                self.assertEqual(res.returncode, 0, res.stderr)
+            finally:
+                os.unlink(path)

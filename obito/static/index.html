@@ -412,6 +412,52 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
   .add-form .form-grid { grid-template-columns: 1fr; }
   .kv { grid-template-columns: 1fr; }
 }
+
+/* ------------------------------------------------------------------ Phase 2: Tabs & Ansichten */
+.tabs { display: flex; gap: 4px; padding: 8px 20px 0; border-bottom: 1px solid var(--line); background: rgba(5, 9, 18, 0.6); position: sticky; top: var(--header-h); z-index: 5; overflow-x: auto; }
+.tab { background: transparent; border: 1px solid transparent; border-bottom: 0; color: var(--muted); font: 600 12.5px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; padding: 9px 14px; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--text-strong); }
+.tab.active { color: var(--cyan); border-color: var(--line-strong); background: var(--panel); box-shadow: 0 -8px 18px rgba(63, 224, 255, 0.08); }
+.tab-badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--cyan); color: #04101c; font-size: 11px; text-align: center; }
+.view-page { padding: 16px 20px 24px; min-height: calc(100vh - var(--header-h) - 40px); }
+.page-grid { display: grid; gap: 16px; }
+.page-grid.two { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
+.view-page .panel { max-height: calc(100vh - var(--header-h) - 80px); display: flex; flex-direction: column; }
+.view-page .panel-body { overflow-y: auto; }
+.view-page .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.view-page .form-grid .wide { grid-column: 1 / -1; }
+.view-page .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.item.selectable { cursor: pointer; }
+.item.selectable:hover, .item.selected { border-color: var(--line-strong); box-shadow: var(--glow); }
+.progress { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.progress-bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(63, 224, 255, 0.12); overflow: hidden; }
+.progress-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); transition: width .3s; }
+.progress-bar.status-fertig span { background: var(--ok); }
+.progress-bar.status-fehler span, .progress-bar.status-abgebrochen span { background: var(--bad); }
+.tag.status-geplant { color: var(--muted); }
+.tag.status-laeuft { color: var(--cyan); border-color: rgba(63, 224, 255, 0.4); }
+.tag.status-fertig { color: var(--ok); border-color: rgba(56, 232, 160, 0.4); }
+.tag.status-fehler, .tag.status-abgebrochen { color: var(--bad); border-color: rgba(255, 94, 122, 0.5); }
+.tag.doc { color: var(--warn); border-color: rgba(255, 200, 87, 0.45); }
+.steps { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.steps li { border-left: 3px solid var(--line-strong); padding: 4px 8px; font-size: 13px; }
+.steps li.fertig { border-color: var(--ok); } .steps li.fehler { border-color: var(--bad); } .steps li.laeuft { border-color: var(--cyan); }
+.steps .result { color: var(--muted); font-size: 12px; white-space: pre-wrap; margin-top: 3px; }
+.report { white-space: pre-wrap; font-size: 13px; background: rgba(5, 9, 18, 0.5); border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 8px; }
+.switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span { position: absolute; inset: 0; border-radius: 10px; background: rgba(142, 166, 191, 0.3); cursor: pointer; transition: background .2s; }
+.switch span::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; border-radius: 50%; background: var(--text); transition: transform .2s; }
+.switch input:checked + span { background: var(--cyan-dim); }
+.switch input:checked + span::before { transform: translateX(18px); background: #04101c; }
+.notes-group { margin-top: 10px; }
+.notes-group h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.note-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.note-row.done { opacity: 0.55; text-decoration: line-through; }
+.note-row .spacer { flex: 1; }
+.summary-box { white-space: pre-wrap; font-size: 12.5px; color: var(--text); background: rgba(5, 9, 18, 0.5); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+@media (max-width: 1100px) { .page-grid.two { grid-template-columns: 1fr; } .tabs { position: static; } .view-page .panel { max-height: none; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -436,7 +482,16 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
 </header>
 <div class="offline-banner" id="offline-banner" role="status"></div>
 
-<main class="hud-main">
+<nav class="tabs" aria-label="Bereiche">
+  <button type="button" class="tab active" data-view="uebersicht" aria-selected="true">Übersicht</button>
+  <button type="button" class="tab" data-view="projekte" aria-selected="false">Projekte</button>
+  <button type="button" class="tab" data-view="daten" aria-selected="false">Datenzentrum</button>
+  <button type="button" class="tab" data-view="missionen" aria-selected="false">Missionen <span class="tab-badge" id="tab-missionen-badge" hidden></span></button>
+  <button type="button" class="tab" data-view="automationen" aria-selected="false">Automationen</button>
+  <button type="button" class="tab" data-view="modelle" aria-selected="false">Modelle</button>
+</nav>
+
+<main class="hud-main view" id="view-uebersicht">
   <!-- ============================================================ Chat -->
   <section class="panel chat-panel" aria-labelledby="chat-title">
     <div class="panel-head">
@@ -619,6 +674,140 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
 
   </aside>
 </main>
+
+<!-- ============================================================ Projekte -->
+<section class="view view-page" id="view-projekte" hidden aria-labelledby="pr-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="pr-title">Projekte</h2><div class="panel-tools"><label class="check" for="pr-alle"><input type="checkbox" id="pr-alle"> archivierte</label><button type="button" class="btn ghost small" id="btn-pr-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <form class="form-grid" id="pr-form">
+          <div class="field"><label for="pr-name">Neues Projekt</label><input class="input" id="pr-name" type="text" placeholder="Name" required maxlength="80"></div>
+          <div class="field"><label for="pr-tags">Tags</label><input class="input" id="pr-tags" type="text" placeholder="kommagetrennt" maxlength="200"></div>
+          <div class="field wide"><label for="pr-beschreibung">Beschreibung</label><input class="input" id="pr-beschreibung" type="text" placeholder="optional" maxlength="500"></div>
+          <div class="form-actions wide"><span class="form-msg" id="pr-form-msg"></span><button type="submit" class="btn primary small">Anlegen</button></div>
+        </form>
+        <ul class="list" id="pr-list" aria-label="Projekte"></ul>
+        <p class="muted-note" id="pr-empty" hidden>Noch keine Projekte.</p>
+      </div>
+    </section>
+    <section class="panel" id="pr-detail-panel">
+      <div class="panel-head"><h2 id="pr-detail-title">Projektdetails</h2><div class="panel-tools"><button type="button" class="btn ghost small" id="btn-pr-archiv" hidden>Archivieren</button></div></div>
+      <div class="panel-body" id="pr-detail">
+        <p class="muted-note">Projekt links auswählen.</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Datenzentrum -->
+<section class="view view-page" id="view-daten" hidden aria-labelledby="dz-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="dz-title">Datenzentrum</h2><div class="panel-tools"><span class="count" id="dz-count">–</span><button type="button" class="btn ghost small" id="btn-dz-sync" title="Geänderte Dateien neu indexieren">Sync</button><button type="button" class="btn ghost small" id="btn-dz-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <form class="form-grid" id="dz-path-form">
+          <div class="field wide"><label for="dz-pfad">Datei oder Ordner aus dem Arbeitsbereich</label><input class="input mono" id="dz-pfad" type="text" placeholder="z. B. docs/handbuch.md oder docs/" required></div>
+          <div class="field"><label for="dz-projekt">Projekt</label><input class="input" id="dz-projekt" type="text" placeholder="optional" maxlength="80"></div>
+          <div class="form-actions"><span class="form-msg" id="dz-path-msg"></span><button type="submit" class="btn primary small">Indexieren</button></div>
+        </form>
+        <details class="add-form"><summary>+ Text direkt hinzufügen</summary>
+          <form class="form-grid" id="dz-text-form">
+            <div class="field wide"><label for="dz-titel">Titel</label><input class="input" id="dz-titel" type="text" required maxlength="120"></div>
+            <div class="field wide"><label for="dz-text">Text</label><textarea class="textarea" id="dz-text" rows="4" required></textarea></div>
+            <div class="form-actions wide"><span class="form-msg" id="dz-text-msg"></span><button type="submit" class="btn primary small">Speichern</button></div>
+          </form>
+        </details>
+        <ul class="list" id="dz-list" aria-label="Dokumente" style="margin-top:10px;"></ul>
+        <p class="muted-note" id="dz-empty" hidden>Noch keine Dokumente – Dateien oder Text hinzufügen.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Semantische Suche</h2></div>
+      <div class="panel-body">
+        <div class="field"><label for="dz-suche">Suche in deinen Dokumenten</label><input class="input" id="dz-suche" type="search" placeholder="z. B. ESC Dauerstrom"></div>
+        <ul class="list" id="dz-treffer" aria-label="Treffer" style="margin-top:10px;"></ul>
+        <p class="muted-note" id="dz-treffer-leer" hidden>Keine Treffer.</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Missionen -->
+<section class="view view-page" id="view-missionen" hidden aria-labelledby="mi-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="mi-title">Aktive Missionen</h2><div class="panel-tools"><span class="count" id="mi-count">–</span><button type="button" class="btn ghost small" id="btn-mi-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <form class="form-grid" id="mi-form">
+          <div class="field wide"><label for="mi-ziel">Neue Mission – Ziel</label><textarea class="textarea" id="mi-ziel" rows="2" placeholder="z. B. Prüfe Gewicht, Schub und Akkulaufzeit meines 5-Zoll-Quads und schlage Verbesserungen vor" required></textarea></div>
+          <div class="field"><label for="mi-projekt">Projekt</label><input class="input" id="mi-projekt" type="text" placeholder="optional" maxlength="80"></div>
+          <div class="field"><label class="check" for="mi-start"><input type="checkbox" id="mi-start" checked> sofort starten</label></div>
+          <div class="form-actions wide"><span class="form-msg" id="mi-form-msg"></span><button type="submit" class="btn primary small">Planen</button></div>
+        </form>
+        <ul class="list" id="mi-list" aria-label="Missionen"></ul>
+        <p class="muted-note" id="mi-empty" hidden>Noch keine Missionen.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 id="mi-detail-title">Mission</h2><div class="panel-tools" id="mi-detail-tools"></div></div>
+      <div class="panel-body" id="mi-detail"><p class="muted-note">Mission links auswählen.</p></div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Automationen -->
+<section class="view view-page" id="view-automationen" hidden aria-labelledby="au-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="au-title">Automationen</h2><div class="panel-tools"><span class="count" id="au-zeitplaner">–</span><button type="button" class="btn ghost small" id="btn-au-vorschlaege" title="Empfohlene Automationen einrichten">Vorschläge einrichten</button><button type="button" class="btn ghost small" id="btn-au-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <ul class="list" id="au-list" aria-label="Automationen"></ul>
+        <p class="muted-note" id="au-empty" hidden>Noch keine Automationen – Vorschläge einrichten oder unten anlegen.</p>
+        <details class="add-form"><summary>+ Automation anlegen</summary>
+          <form class="form-grid" id="au-form">
+            <div class="field"><label for="au-name">Name</label><input class="input" id="au-name" type="text" required maxlength="80"></div>
+            <div class="field"><label for="au-art">Art</label><select class="select" id="au-art">
+              <option value="gedaechtnis_konsolidieren">Gedächtnis konsolidieren</option><option value="backup">Backup</option><option value="eval">Eval-Lauf</option><option value="wissen_sync">Wissens-Sync</option><option value="mission">Mission</option><option value="werkzeug">Werkzeug</option></select></div>
+            <div class="field"><label for="au-intervall">Intervall (Minuten)</label><input class="input" id="au-intervall" type="number" min="1" value="1440" required></div>
+            <div class="field"><label for="au-parameter">Parameter (JSON)</label><input class="input mono" id="au-parameter" type="text" placeholder='{"tage": 7}'></div>
+            <div class="form-actions wide"><span class="form-msg" id="au-form-msg"></span><button type="submit" class="btn primary small">Anlegen</button></div>
+          </form>
+        </details>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 id="au-detail-title">Läufe</h2></div>
+      <div class="panel-body" id="au-detail"><p class="muted-note">Automation links auswählen.</p></div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Modelle -->
+<section class="view view-page" id="view-modelle" hidden aria-labelledby="mo-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="mo-title">Modell-Hub</h2><div class="panel-tools"><button type="button" class="btn ghost small" id="btn-mo-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <p class="model-note">Hauptmodell beantwortet Fragen (Experten, Synthese); das Routing-Modell übernimmt Einordnung und Gedächtnis-Extraktion. VRAM-Werte sind Schätzungen.</p>
+        <ul class="list" id="mo-list" aria-label="Modelle"></ul>
+        <p class="muted-note" id="mo-empty" hidden>Keine Modelle installiert.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Modell laden</h2></div>
+      <div class="panel-body">
+        <form class="form-grid" id="mo-pull-form">
+          <div class="field wide"><label for="mo-pull-name">Name (Ollama-Tag)</label><input class="input mono" id="mo-pull-name" type="text" placeholder="z. B. qwen2.5:7b oder nomic-embed-text" required></div>
+          <div class="form-actions wide"><span class="form-msg" id="mo-pull-msg"></span><button type="submit" class="btn primary small" id="btn-mo-pull">Laden</button></div>
+        </form>
+        <div class="progress" id="mo-progress" hidden><div class="progress-bar"><span id="mo-progress-bar"></span></div><span class="mono" id="mo-progress-text"></span></div>
+        <div class="section-title">Empfehlungen</div>
+        <dl class="kv"><dt>8 GB</dt><dd>qwen2.5:7b · num_ctx 8192 · Routing-Modell leer</dd><dt>12 GB</dt><dd>qwen2.5:7b + qwen2.5:3b · num_ctx 12288</dd><dt>16 GB</dt><dd>qwen2.5:14b + qwen2.5:3b · num_ctx 16384</dd><dt>CPU / &lt;8 GB</dt><dd>qwen2.5:3b · Tiefe schnell</dd></dl>
+      </div>
+    </section>
+  </div>
+</section>
 
 <dialog class="dialog" id="dialog" aria-labelledby="dialog-title">
   <form method="dialog" id="dialog-form">
@@ -1209,6 +1398,11 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
     if (experts.length) {
       meta.appendChild(el('span', { text: 'Experten:' }));
       for (const e of experts) meta.appendChild(el('span', { class: 'tag expert', text: e }));
+    }
+    const docs = Array.isArray(answer.dokumente) ? answer.dokumente : [];
+    if (docs.length) {
+      meta.appendChild(el('span', { text: 'Dokumente:' }));
+      for (const d of docs) meta.appendChild(el('span', { class: 'tag doc', title: (d.inhalt || '').slice(0, 300), text: '[' + (d.titel || '?') + ' §' + (d.abschnitt || '?') + ']' }));
     }
     const tools = Array.isArray(answer.werkzeuge) ? answer.werkzeuge : [];
     if (tools.length) {
@@ -1822,6 +2016,448 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
     loadModels();
     setInterval(() => refreshStatus(false), 10000);
     ui.frage.focus();
+  }
+
+  window.OBITO = { el, esc, api, ApiError, toast, fmtDate, fmtBytes, fmtNum, fmtDur, store, refreshStatus, loadModels, $, $$ };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+<script>
+/* ================================================================ Phase 2: Tabs, Projekte, Datenzentrum, Missionen, Automationen, Modelle */
+(function () {
+  'use strict';
+  const O = window.OBITO;
+  const { el, api, toast, fmtDate, fmtBytes, fmtNum, fmtDur, store, $, $$ } = O;
+
+  const state = { view: 'uebersicht', project: null, mission: null, automation: null, missionTimer: null, pulling: false };
+
+  /* ---------------------------------------------------------------- Tabs */
+  const loaders = { projekte: loadProjects, daten: loadDocuments, missionen: loadMissions, automationen: loadAutomations, modelle: loadModelHub };
+
+  function showView(name) {
+    state.view = name;
+    $$('.view').forEach(v => { v.hidden = v.id !== 'view-' + name; });
+    $$('.tab').forEach(t => { const on = t.dataset.view === name; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
+    store.set('view', name);
+    if (loaders[name]) loaders[name]();
+    if (name !== 'missionen') stopMissionTimer();
+  }
+
+  function errText(e) { return (e && e.message) ? e.message : String(e); }
+
+  function statusTag(status) { return el('span', { class: 'tag status-' + status, text: status }); }
+
+  function confirmDelete(text) { return window.confirm(text); }
+
+  /* ---------------------------------------------------------------- Projekte */
+  async function loadProjects() {
+    const list = $('#pr-list');
+    try {
+      const data = await api('GET', '/api/projekte' + ($('#pr-alle').checked ? '?alle=1' : ''));
+      list.innerHTML = '';
+      $('#pr-empty').hidden = data.projekte.length > 0;
+      for (const p of data.projekte) {
+        const li = el('li', { class: 'item selectable' + (state.project === p.name ? ' selected' : ''), tabindex: 0, role: 'button' });
+        const top = el('div', { class: 'item-top' }, [el('strong', { text: p.name }), el('span', { class: 'tag status-' + (p.status === 'aktiv' ? 'laeuft' : 'geplant'), text: p.status })]);
+        (p.tags || []).forEach(t => top.appendChild(el('span', { class: 'tag', text: t })));
+        li.appendChild(top);
+        if (p.beschreibung) li.appendChild(el('p', { class: 'item-text', text: p.beschreibung }));
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: p.offene_aufgaben + ' offene Aufgaben' }), el('span', { text: p.notizen + ' Notizen' }), el('span', { text: 'geändert ' + fmtDate(p.geaendert) })]));
+        const open = () => { state.project = p.name; loadProjectDetail(p.name); $$('#pr-list .item').forEach(n => n.classList.remove('selected')); li.classList.add('selected'); };
+        li.addEventListener('click', open);
+        li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        list.appendChild(li);
+      }
+      if (state.project) loadProjectDetail(state.project);
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  async function loadProjectDetail(name) {
+    const box = $('#pr-detail');
+    try {
+      const data = await api('GET', '/api/projekte/' + encodeURIComponent(name));
+      const p = data.projekt;
+      $('#pr-detail-title').textContent = p.name;
+      $('#btn-pr-archiv').hidden = p.status === 'archiviert';
+      box.innerHTML = '';
+      if (data.zusammenfassung) box.appendChild(el('div', { class: 'summary-box', text: data.zusammenfassung }));
+      const form = el('form', { class: 'form-grid', style: 'margin-top:10px;' });
+      const art = el('select', { class: 'select' });
+      for (const k of ['aufgabe', 'notiz', 'entscheidung', 'version', 'problem', 'ergebnis']) art.appendChild(el('option', { value: k, text: k }));
+      const titel = el('input', { class: 'input', type: 'text', placeholder: 'Titel', required: true, maxlength: 200 });
+      const inhalt = el('input', { class: 'input', type: 'text', placeholder: 'Inhalt (optional)', maxlength: 2000 });
+      const msg = el('span', { class: 'form-msg' });
+      form.append(el('div', { class: 'field' }, [el('label', { text: 'Art' }), art]), el('div', { class: 'field' }, [el('label', { text: 'Titel' }), titel]),
+        el('div', { class: 'field wide' }, [el('label', { text: 'Inhalt' }), inhalt]),
+        el('div', { class: 'form-actions wide' }, [msg, el('button', { type: 'submit', class: 'btn primary small', text: 'Festhalten' })]));
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+          await api('POST', '/api/projekte/' + encodeURIComponent(name) + '/notizen', { art: art.value, titel: titel.value.trim(), inhalt: inhalt.value.trim() });
+          titel.value = ''; inhalt.value = ''; loadProjectDetail(name); loadProjects();
+        } catch (err) { msg.textContent = errText(err); }
+      });
+      box.appendChild(form);
+      const groups = {};
+      for (const n of data.notizen) (groups[n.art] = groups[n.art] || []).push(n);
+      for (const [kind, notes] of Object.entries(groups)) {
+        const g = el('div', { class: 'notes-group' }, el('h4', { text: kind + ' (' + notes.length + ')' }));
+        for (const n of notes) {
+          const row = el('div', { class: 'note-row' + (n.erledigt ? ' done' : '') });
+          if (n.art === 'aufgabe') {
+            const cb = el('input', { type: 'checkbox', title: 'erledigt' });
+            cb.checked = !!n.erledigt;
+            cb.addEventListener('change', async () => {
+              try { await api('POST', '/api/notizen/' + n.id + '/erledigt', { erledigt: cb.checked }); loadProjectDetail(name); loadProjects(); }
+              catch (err) { toast(errText(err), 'bad'); }
+            });
+            row.appendChild(cb);
+          }
+          const text = el('div', {}, [el('strong', { text: n.titel }), n.inhalt && n.inhalt !== n.titel ? el('div', { class: 'result', text: n.inhalt }) : null]);
+          row.appendChild(text);
+          row.appendChild(el('span', { class: 'spacer' }));
+          row.appendChild(el('span', { class: 'mono', style: 'font-size:11px;color:var(--muted)', text: fmtDate(n.erstellt) }));
+          const del = el('button', { type: 'button', class: 'icon-btn', title: 'Notiz löschen', text: '✕' });
+          del.addEventListener('click', async () => {
+            if (!confirmDelete('Notiz »' + n.titel + '« löschen?')) return;
+            try { await api('DELETE', '/api/notizen/' + n.id); loadProjectDetail(name); loadProjects(); } catch (err) { toast(errText(err), 'bad'); }
+          });
+          row.appendChild(del);
+          g.appendChild(row);
+        }
+        box.appendChild(g);
+      }
+      if (data.dateien && data.dateien.length) {
+        const g = el('div', { class: 'notes-group' }, el('h4', { text: 'Dateien (' + data.dateien.length + ')' }));
+        for (const f of data.dateien) g.appendChild(el('div', { class: 'note-row' }, [el('span', { class: 'mono', text: f.pfad }), f.beschreibung ? el('span', { text: '– ' + f.beschreibung }) : null, f.existiert === false ? el('span', { class: 'tag status-fehler', text: 'fehlt' }) : null]));
+        box.appendChild(g);
+      }
+    } catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'muted-note', text: errText(e) })); }
+  }
+
+  async function createProject(e) {
+    e.preventDefault();
+    const msg = $('#pr-form-msg');
+    try {
+      const data = await api('POST', '/api/projekte', { name: $('#pr-name').value.trim(), beschreibung: $('#pr-beschreibung').value.trim(), tags: $('#pr-tags').value });
+      $('#pr-name').value = ''; $('#pr-beschreibung').value = ''; $('#pr-tags').value = ''; msg.textContent = '';
+      state.project = data.projekt.name;
+      loadProjects();
+      toast('Projekt »' + data.projekt.name + '« angelegt', 'ok');
+    } catch (err) { msg.textContent = errText(err); }
+  }
+
+  /* ---------------------------------------------------------------- Datenzentrum */
+  async function loadDocuments() {
+    const list = $('#dz-list');
+    try {
+      const data = await api('GET', '/api/dokumente');
+      list.innerHTML = '';
+      $('#dz-count').textContent = data.dokumente.length + ' Dokumente';
+      $('#dz-empty').hidden = data.dokumente.length > 0;
+      for (const d of data.dokumente) {
+        const li = el('li', { class: 'item' });
+        const top = el('div', { class: 'item-top' }, [el('strong', { text: d.titel }), el('span', { class: 'tag', text: d.art }), d.projekt ? el('span', { class: 'tag', text: d.projekt }) : null, d.fehlt ? el('span', { class: 'tag status-fehler', text: 'Datei fehlt' }) : null, el('span', { class: 'spacer' })]);
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Dokument entfernen', text: '✕' });
+        del.addEventListener('click', async () => {
+          if (!confirmDelete('Dokument »' + d.titel + '« aus dem Index entfernen?')) return;
+          try { await api('DELETE', '/api/dokumente/' + d.id); loadDocuments(); } catch (err) { toast(errText(err), 'bad'); }
+        });
+        top.appendChild(del);
+        li.appendChild(top);
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: '#' + d.id }), el('span', { text: d.abschnitte + ' Abschnitte' }), el('span', { text: fmtBytes(d.groesse) }), d.pfad ? el('span', { class: 'mono', text: d.pfad }) : null, el('span', { text: fmtDate(d.hinzugefuegt) })]));
+        list.appendChild(li);
+      }
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  async function addDocumentPath(e) {
+    e.preventDefault();
+    const msg = $('#dz-path-msg');
+    msg.textContent = 'Indexiere …';
+    try {
+      const data = await api('POST', '/api/dokumente', { pfad: $('#dz-pfad').value.trim(), projekt: $('#dz-projekt').value.trim() || undefined });
+      msg.textContent = data.verzeichnis ? data.verzeichnis.hinzugefuegt + ' hinzugefügt, ' + data.verzeichnis.unveraendert + ' unverändert' : 'Indexiert: ' + data.dokument.titel;
+      $('#dz-pfad').value = '';
+      loadDocuments();
+    } catch (err) { msg.textContent = errText(err); }
+  }
+
+  async function addDocumentText(e) {
+    e.preventDefault();
+    const msg = $('#dz-text-msg');
+    try {
+      await api('POST', '/api/dokumente', { titel: $('#dz-titel').value.trim(), text: $('#dz-text').value, projekt: $('#dz-projekt').value.trim() || undefined });
+      $('#dz-titel').value = ''; $('#dz-text').value = ''; msg.textContent = 'Gespeichert.';
+      loadDocuments();
+    } catch (err) { msg.textContent = errText(err); }
+  }
+
+  async function syncDocuments() {
+    try {
+      const r = await api('POST', '/api/dokumente/sync', {});
+      toast(r.aktualisiert + ' aktualisiert, ' + r.unveraendert + ' unverändert, ' + (r.fehlend || []).length + ' fehlend', 'ok');
+      loadDocuments();
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  let searchTimer = null;
+  async function searchDocuments() {
+    const q = $('#dz-suche').value.trim();
+    const list = $('#dz-treffer');
+    list.innerHTML = '';
+    $('#dz-treffer-leer').hidden = true;
+    if (!q) return;
+    try {
+      const data = await api('GET', '/api/dokumente/suche?q=' + encodeURIComponent(q) + '&n=8');
+      $('#dz-treffer-leer').hidden = data.treffer.length > 0;
+      for (const c of data.treffer) {
+        const li = el('li', { class: 'item' });
+        li.appendChild(el('div', { class: 'item-top' }, [el('span', { class: 'tag doc', text: '[' + c.titel + ' §' + c.abschnitt + ']' }), el('span', { class: 'score mono', text: 'Treffer ' + fmtNum(c.score) })]));
+        li.appendChild(el('p', { class: 'item-text', text: c.inhalt }));
+        list.appendChild(li);
+      }
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  /* ---------------------------------------------------------------- Missionen */
+  function stopMissionTimer() { if (state.missionTimer) { clearInterval(state.missionTimer); state.missionTimer = null; } }
+
+  function missionProgress(m) {
+    const bar = el('div', { class: 'progress-bar status-' + m.status });
+    bar.appendChild(el('span', { style: 'width:' + Math.round((Number(m.fortschritt) || 0) * 100) + '%' }));
+    return bar;
+  }
+
+  async function loadMissions() {
+    const list = $('#mi-list');
+    try {
+      const data = await api('GET', '/api/missionen');
+      list.innerHTML = '';
+      $('#mi-count').textContent = data.missionen.length + ' gesamt';
+      $('#mi-empty').hidden = data.missionen.length > 0;
+      const running = new Set(data.laufend || []);
+      const badge = $('#tab-missionen-badge');
+      badge.hidden = running.size === 0; badge.textContent = String(running.size);
+      for (const m of data.missionen) {
+        const li = el('li', { class: 'item selectable' + (state.mission === m.id ? ' selected' : ''), tabindex: 0, role: 'button' });
+        const done = (m.schritte || []).filter(s => s.status === 'fertig').length;
+        li.appendChild(el('div', { class: 'item-top' }, [el('strong', { text: m.titel }), statusTag(m.status), m.projekt ? el('span', { class: 'tag', text: m.projekt }) : null, el('span', { class: 'spacer' }), el('span', { class: 'mono', text: done + '/' + (m.schritte || []).length })]));
+        li.appendChild(el('div', { class: 'progress' }, [missionProgress(m), el('span', { class: 'mono', text: Math.round((Number(m.fortschritt) || 0) * 100) + ' %' })]));
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: '#' + m.id }), el('span', { text: fmtDate(m.geaendert) })]));
+        const open = () => { state.mission = m.id; loadMissionDetail(m.id); $$('#mi-list .item').forEach(n => n.classList.remove('selected')); li.classList.add('selected'); };
+        li.addEventListener('click', open);
+        li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        list.appendChild(li);
+      }
+      if (state.mission) loadMissionDetail(state.mission);
+      if (running.size && state.view === 'missionen' && !state.missionTimer) state.missionTimer = setInterval(loadMissions, 3000);
+      if (!running.size) stopMissionTimer();
+    } catch (e) { toast(errText(e), 'bad'); stopMissionTimer(); }
+  }
+
+  async function loadMissionDetail(id) {
+    const box = $('#mi-detail');
+    const tools = $('#mi-detail-tools');
+    try {
+      const data = await api('GET', '/api/missionen/' + id);
+      const m = data.mission;
+      $('#mi-detail-title').textContent = '#' + m.id + ' ' + m.titel;
+      tools.innerHTML = '';
+      const act = async (path, label) => { try { await api('POST', '/api/missionen/' + id + '/' + path, {}); toast(label, 'ok'); loadMissions(); } catch (err) { toast(errText(err), 'bad'); } };
+      if (!data.laeuft && (m.status === 'geplant' || m.status === 'fehler' || m.status === 'abgebrochen' || m.status === 'pausiert')) {
+        tools.appendChild(el('button', { type: 'button', class: 'btn primary small', text: 'Starten', onclick: () => act('start', 'Mission gestartet') }));
+      }
+      if (data.laeuft) tools.appendChild(el('button', { type: 'button', class: 'btn danger small', text: 'Stoppen', onclick: () => act('stop', 'Abbruch angefordert') }));
+      tools.appendChild(el('button', { type: 'button', class: 'btn ghost small', text: 'Löschen', onclick: async () => {
+        if (!confirmDelete('Mission »' + m.titel + '« löschen?')) return;
+        try { await api('DELETE', '/api/missionen/' + id); state.mission = null; box.innerHTML = ''; tools.innerHTML = ''; $('#mi-detail-title').textContent = 'Mission'; loadMissions(); } catch (err) { toast(errText(err), 'bad'); }
+      } }));
+      box.innerHTML = '';
+      box.appendChild(el('div', { class: 'item-top' }, [statusTag(m.status), m.projekt ? el('span', { class: 'tag', text: m.projekt }) : null, el('span', { class: 'mono', text: Math.round((Number(m.fortschritt) || 0) * 100) + ' %' })]));
+      box.appendChild(el('p', { class: 'item-text', text: 'Ziel: ' + m.ziel }));
+      const steps = el('ol', { class: 'steps' });
+      for (const s of m.schritte || []) {
+        const li = el('li', { class: s.status });
+        li.appendChild(el('div', {}, [el('strong', { text: s.nr + '. ' }), el('span', { text: s.beschreibung }), el('span', { text: ' ' }), el('span', { class: 'tag ' + (s.art === 'werkzeug' ? 'tool' : ''), text: s.art === 'werkzeug' ? (s.werkzeug || 'werkzeug') : 'frage' }), el('span', { text: ' ' }), statusTag(s.status), s.dauer ? el('span', { class: 'mono', style: 'font-size:11px;color:var(--muted);margin-left:6px', text: fmtDur(s.dauer) }) : null]));
+        if (s.ergebnis) li.appendChild(el('div', { class: 'result', text: String(s.ergebnis).slice(0, 1200) + (String(s.ergebnis).length > 1200 ? ' …' : '') }));
+        steps.appendChild(li);
+      }
+      box.appendChild(steps);
+      if (m.bericht) box.appendChild(el('div', { class: 'report', text: m.bericht }));
+      if (m.fehler) box.appendChild(el('p', { class: 'muted-note', style: 'color:var(--bad)', text: 'Fehler: ' + m.fehler }));
+    } catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'muted-note', text: errText(e) })); }
+  }
+
+  async function createMission(e) {
+    e.preventDefault();
+    const msg = $('#mi-form-msg');
+    msg.textContent = 'Plane …';
+    try {
+      const data = await api('POST', '/api/missionen', { ziel: $('#mi-ziel').value.trim(), projekt: $('#mi-projekt').value.trim() || undefined, start: $('#mi-start').checked });
+      msg.textContent = '';
+      $('#mi-ziel').value = '';
+      state.mission = data.mission.id;
+      toast('Mission »' + data.mission.titel + '« geplant' + ($('#mi-start').checked ? ' und gestartet' : ''), 'ok');
+      loadMissions();
+    } catch (err) { msg.textContent = errText(err); }
+  }
+
+  /* ---------------------------------------------------------------- Automationen */
+  async function loadAutomations() {
+    const list = $('#au-list');
+    try {
+      const data = await api('GET', '/api/automationen');
+      list.innerHTML = '';
+      $('#au-zeitplaner').textContent = data.zeitplaner_aktiv ? 'Zeitplaner aktiv' : 'Zeitplaner aus (serve läuft?)';
+      $('#au-empty').hidden = data.automationen.length > 0;
+      for (const a of data.automationen) {
+        const li = el('li', { class: 'item' + (a.aktiv ? '' : ' inactive') });
+        const sw = el('label', { class: 'switch', title: a.aktiv ? 'aktiv' : 'inaktiv' });
+        const cb = el('input', { type: 'checkbox' }); cb.checked = !!a.aktiv;
+        cb.addEventListener('change', async () => { try { await api('POST', '/api/automationen/' + a.id + '/aktiv', { aktiv: cb.checked }); loadAutomations(); } catch (err) { toast(errText(err), 'bad'); } });
+        sw.append(cb, el('span'));
+        const top = el('div', { class: 'item-top' }, [sw, el('strong', { text: a.name }), el('span', { class: 'tag', text: a.art }), el('span', { class: 'mono', text: 'alle ' + a.intervall_minuten + ' min' }), el('span', { class: 'spacer' })]);
+        top.appendChild(el('button', { type: 'button', class: 'btn ghost small', text: 'Jetzt', onclick: async () => {
+          try { const r = await api('POST', '/api/automationen/' + a.id + '/jetzt', {}); toast('[' + r.status + '] ' + r.meldung, r.status === 'ok' ? 'ok' : 'bad', 6000); loadAutomations(); if (state.automation === a.id) loadRuns(a.id); } catch (err) { toast(errText(err), 'bad'); }
+        } }));
+        top.appendChild(el('button', { type: 'button', class: 'btn ghost small', text: 'Läufe', onclick: () => { state.automation = a.id; loadRuns(a.id); } }));
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Automation löschen', text: '✕' });
+        del.addEventListener('click', async () => { if (!confirmDelete('Automation »' + a.name + '« löschen?')) return; try { await api('DELETE', '/api/automationen/' + a.id); loadAutomations(); } catch (err) { toast(errText(err), 'bad'); } });
+        top.appendChild(del);
+        li.appendChild(top);
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: 'letzter Lauf: ' + (a.letzter_lauf ? fmtDate(a.letzter_lauf) + ' (' + (a.letzter_status || '?') + ')' : 'nie') }), el('span', { text: 'nächster: ' + (a.naechster_lauf ? fmtDate(a.naechster_lauf) : '–') }), a.letzte_meldung ? el('span', { text: a.letzte_meldung.slice(0, 160) }) : null]));
+        list.appendChild(li);
+      }
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  async function loadRuns(id) {
+    const box = $('#au-detail');
+    try {
+      const data = await api('GET', '/api/automationen/' + id + '/laeufe?n=30');
+      $('#au-detail-title').textContent = 'Läufe #' + id;
+      box.innerHTML = '';
+      if (!data.laeufe.length) { box.appendChild(el('p', { class: 'muted-note', text: 'Noch keine Läufe.' })); return; }
+      const ol = el('ol', { class: 'steps' });
+      for (const r of data.laeufe) ol.appendChild(el('li', { class: r.status === 'ok' ? 'fertig' : 'fehler' }, [el('span', { class: 'mono', text: fmtDate(r.gestartet) + ' ' }), statusTag(r.status === 'ok' ? 'fertig' : 'fehler'), el('div', { class: 'result', text: r.meldung || '' })]));
+      box.appendChild(ol);
+    } catch (e) { box.innerHTML = ''; box.appendChild(el('p', { class: 'muted-note', text: errText(e) })); }
+  }
+
+  async function createAutomation(e) {
+    e.preventDefault();
+    const msg = $('#au-form-msg');
+    let params = {};
+    const raw = $('#au-parameter').value.trim();
+    if (raw) { try { params = JSON.parse(raw); } catch (err) { msg.textContent = 'Parameter müssen gültiges JSON sein.'; return; } }
+    try {
+      await api('POST', '/api/automationen', { name: $('#au-name').value.trim(), art: $('#au-art').value, intervall_minuten: Number($('#au-intervall').value), parameter: params });
+      $('#au-name').value = ''; $('#au-parameter').value = ''; msg.textContent = '';
+      loadAutomations();
+    } catch (err) { msg.textContent = errText(err); }
+  }
+
+  async function installSuggestions() {
+    try { const r = await api('POST', '/api/automationen/vorschlaege', { aktiv: true }); toast(r.automationen.length + ' Automation(en) eingerichtet', 'ok'); loadAutomations(); } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  /* ---------------------------------------------------------------- Modelle */
+  function vramEstimate(m, numCtx) {
+    if (!m.groesse) return null;
+    const match = /(\d+(?:[.,]\d+)?)\s*B/i.exec(m.parameter || '') || /(\d+(?:\.\d+)?)b\b/i.exec(m.name || '');
+    const params = match ? parseFloat(match[1].replace(',', '.')) : 7;
+    return (m.groesse / 1e9 * 1.1 + 0.5 * (numCtx / 8192) * (params / 7) + 0.4).toFixed(1).replace('.', ',');
+  }
+
+  async function loadModelHub() {
+    const list = $('#mo-list');
+    try {
+      const [data, st] = await Promise.all([api('GET', '/api/modelle'), api('GET', '/api/status')]);
+      const numCtx = (st && st.num_ctx) || 8192;
+      list.innerHTML = '';
+      $('#mo-empty').hidden = data.modelle.length > 0;
+      for (const m of data.modelle) {
+        const isMain = m.name === data.aktuell, isFast = data.schnell && m.name === data.schnell;
+        const li = el('li', { class: 'item' });
+        const top = el('div', { class: 'item-top' }, [el('strong', { class: 'mono', text: m.name }), m.parameter ? el('span', { class: 'tag', text: m.parameter }) : null, m.quantisierung ? el('span', { class: 'tag', text: m.quantisierung }) : null, isMain ? el('span', { class: 'tag expert', text: 'Hauptmodell' }) : null, isFast ? el('span', { class: 'tag expert', text: 'Routing' }) : null, el('span', { class: 'spacer' })]);
+        const setModel = async (fast) => { try { await api('POST', '/api/modell', { name: m.name, schnell: fast }); toast((fast ? 'Routing-Modell' : 'Hauptmodell') + ': ' + m.name, 'ok'); loadModelHub(); O.refreshStatus(false); } catch (err) { toast(errText(err), 'bad'); } };
+        if (!isMain) top.appendChild(el('button', { type: 'button', class: 'btn ghost small', text: 'Hauptmodell', onclick: () => setModel(false) }));
+        if (!isFast) top.appendChild(el('button', { type: 'button', class: 'btn ghost small', text: 'Routing', onclick: () => setModel(true) }));
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Modell löschen', text: '✕' });
+        del.addEventListener('click', async () => { if (!confirmDelete('Modell »' + m.name + '« löschen?')) return; try { await api('DELETE', '/api/modelle/' + encodeURIComponent(m.name)); loadModelHub(); } catch (err) { toast(errText(err), 'bad'); } });
+        top.appendChild(del);
+        li.appendChild(top);
+        const est = vramEstimate(m, numCtx);
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: fmtBytes(m.groesse) }), est ? el('span', { text: '≈ ' + est + ' GB VRAM bei num_ctx ' + numCtx }) : null, m.familie ? el('span', { text: m.familie }) : null]));
+        list.appendChild(li);
+      }
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  async function pullModel(e) {
+    e.preventDefault();
+    if (state.pulling) return;
+    const name = $('#mo-pull-name').value.trim();
+    const msg = $('#mo-pull-msg'); const bar = $('#mo-progress-bar'); const text = $('#mo-progress-text');
+    state.pulling = true; $('#btn-mo-pull').disabled = true; $('#mo-progress').hidden = false; bar.style.width = '0%'; text.textContent = 'startet …'; msg.textContent = '';
+    try {
+      const res = await fetch('/api/modelle/pull', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      if (!res.ok) { let data = null; try { data = await res.json(); } catch (x) { /* kein JSON */ } throw new Error((data && data.fehler) || ('HTTP ' + res.status)); }
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = ''; let ok = false;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0) {
+          const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+          let ev = 'message', dataStr = '';
+          for (const line of chunk.split('\n')) { if (line.startsWith('event:')) ev = line.slice(6).trim(); else if (line.startsWith('data:')) dataStr += line.slice(5).trim(); }
+          let data = {}; try { data = JSON.parse(dataStr || '{}'); } catch (x) { /* ignorieren */ }
+          if (ev === 'fortschritt') {
+            if (data.total) { const pct = Math.min(100, Math.round((data.completed || 0) * 100 / data.total)); bar.style.width = pct + '%'; text.textContent = pct + ' % · ' + fmtBytes(data.completed || 0) + ' / ' + fmtBytes(data.total) + ' · ' + (data.status || ''); }
+            else text.textContent = data.status || '…';
+          } else if (ev === 'fertig') { ok = true; bar.style.width = '100%'; text.textContent = 'fertig'; }
+          else if (ev === 'fehler') throw new Error(data.fehler || 'Fehler beim Laden');
+        }
+      }
+      if (ok) { toast('Modell ' + name + ' geladen', 'ok'); $('#mo-pull-name').value = ''; loadModelHub(); }
+      else msg.textContent = 'Übertragung beendet, aber kein Abschluss gemeldet.';
+    } catch (err) { msg.textContent = errText(err); }
+    finally { state.pulling = false; $('#btn-mo-pull').disabled = false; }
+  }
+
+  /* ---------------------------------------------------------------- Init */
+  function init() {
+    $$('.tab').forEach(t => t.addEventListener('click', () => showView(t.dataset.view)));
+    $('#pr-form').addEventListener('submit', createProject);
+    $('#btn-pr-refresh').addEventListener('click', loadProjects);
+    $('#pr-alle').addEventListener('change', loadProjects);
+    $('#btn-pr-archiv').addEventListener('click', async () => {
+      if (!state.project || !confirmDelete('Projekt »' + state.project + '« archivieren?')) return;
+      try { await api('DELETE', '/api/projekte/' + encodeURIComponent(state.project)); toast('Archiviert', 'ok'); loadProjects(); } catch (err) { toast(errText(err), 'bad'); }
+    });
+    $('#dz-path-form').addEventListener('submit', addDocumentPath);
+    $('#dz-text-form').addEventListener('submit', addDocumentText);
+    $('#btn-dz-sync').addEventListener('click', syncDocuments);
+    $('#btn-dz-refresh').addEventListener('click', loadDocuments);
+    $('#dz-suche').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(searchDocuments, 300); });
+    $('#mi-form').addEventListener('submit', createMission);
+    $('#btn-mi-refresh').addEventListener('click', loadMissions);
+    $('#au-form').addEventListener('submit', createAutomation);
+    $('#btn-au-refresh').addEventListener('click', loadAutomations);
+    $('#btn-au-vorschlaege').addEventListener('click', installSuggestions);
+    $('#btn-mo-refresh').addEventListener('click', loadModelHub);
+    $('#mo-pull-form').addEventListener('submit', pullModel);
+    const projekt = $('#projekt');
+    if (projekt) { for (const id of ['mi-projekt', 'dz-projekt']) { const f = $('#' + id); if (f && !f.value) f.placeholder = projekt.value.trim() || 'optional'; } }
+    const saved = store.get('view', 'uebersicht');
+    if (saved !== 'uebersicht' && loaders[saved]) showView(saved);
+    // Missions-Badge auch in der Übersicht aktuell halten
+    api('GET', '/api/missionen').then(d => { const b = $('#tab-missionen-badge'); const n = (d.laufend || []).length; b.hidden = !n; b.textContent = String(n); }).catch(() => {});
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
