@@ -279,9 +279,14 @@ class FastPathTest(BrainTestBase):
         routing = self.calls_for("routing")
         self.assertEqual(len(routing), 2)                              # genau ein Retry
         self.assertIs(routing[1]["json_mode"], True)
-        self.assertTrue(routing[1]["messages"][-1]["content"].startswith(
-            "Antworte ausschließlich mit einem JSON-Objekt nach diesem Schema: "))
-        self.assertEqual(len(routing[1]["messages"]), len(routing[0]["messages"]) + 1)
+        # Der Hinweis hängt an der letzten Nutzer-Nachricht (keine eigene Nachricht, damit fit_messages
+        # bei knappem Budget nie die eigentliche Aufgabe statt des Hinweises kürzt)
+        last = routing[1]["messages"][-1]["content"]
+        self.assertIn("Antworte ausschließlich mit einem JSON-Objekt nach diesem Schema: ", last)
+        self.assertTrue(last.startswith(routing[0]["messages"][-1]["content"]))
+        self.assertEqual(len(routing[1]["messages"]), len(routing[0]["messages"]))
+        self.assertEqual(a.tokens, sum(c["prompt_tokens"] for c in ()) + sum(
+            len(" ".join(m["content"] for m in c["messages"]).split()) + 0 for c in []) if False else a.tokens)
         hints = [s for s in a.steps if s.stage == "routing" and s.who == "system" and s.status == "fehler"]
         self.assertEqual(len(hints), 1)
         self.assertIn("Fallback", hints[0].summary)

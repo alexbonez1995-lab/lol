@@ -20,8 +20,11 @@ import os
 import platform
 import re
 import shutil
+import signal
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Sequence
@@ -32,6 +35,9 @@ if TYPE_CHECKING:  # pragma: no cover - nur für Typprüfer
     from .memory import MemoryStore
 
 MAX_OUTPUT_CHARS = 4000          # maximale Länge einer Werkzeugausgabe
+MAX_ERROR_CHARS = 1000           # maximale Länge einer Fehlermeldung (Argumente stammen vom Modell)
+MAX_PATH_CHARS = 4096
+MAX_PROCESS_BYTES = 1_000_000    # je Strom eines Kindprozesses gepuffert, Rest verworfen
 MAX_DIR_ENTRIES = 200            # Einträge je Verzeichnisauflistung
 MAX_READ_FILE_BYTES = 5 * 1024 * 1024     # datei_lesen lehnt größere Dateien ab
 MAX_WRITE_BYTES = 1024 * 1024             # datei_schreiben schreibt höchstens 1 MB
@@ -250,6 +256,8 @@ class ToolRegistry:
         if pfad is None:
             pfad = "."
         p = str(pfad).strip() or "."
+        if len(p) > MAX_PATH_CHARS:
+            raise ValueError(f"Pfad zu lang (max. {MAX_PATH_CHARS} Zeichen).")
         if "\x00" in p:
             raise ValueError("Pfad enthält ein Nullbyte.")
         candidate = p if os.path.isabs(p) else os.path.join(self.workspace, p)
@@ -356,7 +364,8 @@ class ToolRegistry:
         tool = self.get(name)
         if tool is None:
             available = ", ".join(self._tools) or "keine"
-            return ToolResult(False, "", f"Unbekanntes Werkzeug »{name}«. Verfügbar: {available}")
+            return ToolResult(False, "", truncate_output(f"Unbekanntes Werkzeug »{name[:80]}«. Verfügbar: {available}",
+                                                         MAX_ERROR_CHARS))
         if not isinstance(args, dict):
             args = {}
         try:
@@ -385,7 +394,7 @@ class ToolRegistry:
             return ToolResult(True, truncate_output(output))
         except Exception as e:  # noqa: BLE001 - jede Ausnahme wird zum Fehlerergebnis
             msg = str(e) or e.__class__.__name__
-            return ToolResult(False, "", msg)
+            return ToolResult(False, "", truncate_output(msg, MAX_ERROR_CHARS))
 
 
 # ------------------------------------------------------------------ rechnen
@@ -457,6 +466,8 @@ def _eval_node(node: ast.AST) -> Any:
             return op(left, right)
         except ZeroDivisionError:
             raise ValueError("Division durch null") from None
+        except (OverflowError, ValueError) as e:
+            raise ValueError(f"Rechenfehler: {e}") from None
     if isinstance(node, ast.Call):
         if node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
             raise ValueError("Nicht erlaubt: Schlüsselwort- oder Stern-Argumente")
@@ -484,11 +495,41 @@ def _eval_node(node: ast.AST) -> Any:
     raise ValueError(f"Nicht erlaubt: {type(node).__name__}")
 
 
+_MATH_SAFE: dict[str, Callable[..., Any]] = {
+    name: getattr(math, name) for name in (
+        "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "sinh", "cosh", "tanh",
+        "log", "log2", "log10", "log1p", "exp", "expm1", "floor", "ceil", "trunc", "fabs", "hypot",
+        "degrees", "radians", "gcd", "copysign", "fmod", "remainder", "isqrt", "pow",
+    ) if hasattr(math, name)
+}
+_FACTORIAL_MAX = 1000
+
+
+def _bounded_factorial(n: Any) -> int:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n > _FACTORIAL_MAX:
+        raise ValueError(f"Nicht erlaubt: factorial nur für ganze Zahlen 0…{_FACTORIAL_MAX}")
+    return math.factorial(n)
+
+
+def _bounded_comb(n: Any, k: Any) -> int:
+    if not all(isinstance(x, int) and not isinstance(x, bool) for x in (n, k)) or n > _FACTORIAL_MAX or n < 0:
+        raise ValueError(f"Nicht erlaubt: comb/perm nur für ganze Zahlen 0…{_FACTORIAL_MAX}")
+    return math.comb(n, k)
+
+
+def _bounded_perm(n: Any, k: Any = None) -> int:
+    if not isinstance(n, int) or isinstance(n, bool) or n < 0 or n > _FACTORIAL_MAX:
+        raise ValueError(f"Nicht erlaubt: comb/perm nur für ganze Zahlen 0…{_FACTORIAL_MAX}")
+    return math.perm(n) if k is None else math.perm(n, k)
+
+
+_MATH_SAFE.update({"factorial": _bounded_factorial, "comb": _bounded_comb, "perm": _bounded_perm})
+
+
 def _math_function(attr: str) -> Callable[..., Any] | None:
-    if attr.startswith("_"):
-        return None
-    fn = getattr(math, attr, None)
-    return fn if callable(fn) else None
+    """Nur eine feste Liste schneller Funktionen – kein ``getattr(math, …)``: offene Funktionen
+    wie ``factorial(10**12)`` würden OBITO unter dem Denk-Lock einfrieren."""
+    return _MATH_SAFE.get(attr)
 
 
 def calculate(ausdruck: str) -> str:
@@ -506,7 +547,15 @@ def calculate(ausdruck: str) -> str:
     result = _eval_node(tree)
     if isinstance(result, complex):
         raise ValueError("Nicht erlaubt: komplexes Ergebnis")
-    return f"{expr} = {_format_number(result)}"
+    if isinstance(result, int) and not isinstance(result, bool) and abs(result) >= 10 ** 300:
+        try:
+            return f"{expr} ≈ {float(result):.12e}"
+        except OverflowError:
+            raise ValueError("Nicht erlaubt: Ergebnis zu groß für die Anzeige") from None
+    try:
+        return f"{expr} = {_format_number(result)}"
+    except ValueError:
+        raise ValueError("Nicht erlaubt: Ergebnis zu groß für die Anzeige") from None
 
 
 # ------------------------------------------------------------------ zeit / system
@@ -616,18 +665,62 @@ def _format_process_output(stdout: str, stderr: str, code: int) -> str:
     return out + f"\n[exit {code}]"
 
 
+def _kill_tree(proc: "subprocess.Popen[bytes]") -> None:
+    """Beendet den Kindprozess samt Nachkommen (eigene Prozessgruppe/Session)."""
+    try:
+        if sys.platform.startswith("win"):
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=10)
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        proc.kill()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _read_capped(path: str, limit: int = MAX_PROCESS_BYTES) -> str:
+    """Liest höchstens ``limit`` Bytes einer Ausgabedatei und vermerkt eine Kürzung."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            data = fh.read(limit)
+    except OSError:
+        return ""
+    text = data.decode("utf-8", errors="replace")
+    if size > limit:
+        text += f"\n… [Ausgabe nach {limit // 1_000_000} MB abgeschnitten, {size} Bytes insgesamt]"
+    return text
+
+
 def _run_process(cmd: Sequence[str] | str, *, cwd: str, timeout: int, shell: bool,
                  env: dict[str, str] | None) -> str:
-    try:
-        proc = subprocess.run(
-            cmd, cwd=cwd, shell=shell, env=env, timeout=timeout,
-            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-    except subprocess.TimeoutExpired:
-        raise RuntimeError(f"Zeitlimit ({timeout} s) überschritten") from None
-    stdout = (proc.stdout or b"").decode("utf-8", errors="replace")
-    stderr = (proc.stderr or b"").decode("utf-8", errors="replace")
-    return _format_process_output(stdout, stderr, proc.returncode)
+    """Startet einen Kindprozess in eigener Prozessgruppe; Ausgaben gehen in Temporärdateien
+    (Speicher bleibt begrenzt), beim Zeitlimit wird der ganze Prozessbaum beendet."""
+    popen_kw: dict[str, Any] = {}
+    if sys.platform.startswith("win"):
+        popen_kw["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kw["start_new_session"] = True
+    with tempfile.TemporaryDirectory(prefix="obito-proc-") as tmp:
+        out_path = os.path.join(tmp, "stdout")
+        err_path = os.path.join(tmp, "stderr")
+        with open(out_path, "wb") as out_fh, open(err_path, "wb") as err_fh:
+            proc = subprocess.Popen(
+                cmd, cwd=cwd, shell=shell, env=env, stdin=subprocess.DEVNULL,
+                stdout=out_fh, stderr=err_fh, **popen_kw,
+            )
+            try:
+                proc.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _kill_tree(proc)
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+                raise RuntimeError(f"Zeitlimit ({timeout} s) überschritten") from None
+        return _format_process_output(_read_capped(out_path), _read_capped(err_path), proc.returncode)
 
 
 def _clamp_int(value: Any, low: int, high: int, default: int) -> int:
@@ -684,6 +777,8 @@ def _builtin_tools(reg: ToolRegistry) -> list[Tool]:
             raise FileNotFoundError(f"Datei nicht gefunden: {pfad}")
         if os.path.isdir(real):
             raise IsADirectoryError(f"Ist ein Verzeichnis: {reg.relpath(real)} (nutze »verzeichnis«)")
+        if not stat.S_ISREG(os.stat(real).st_mode):
+            raise ValueError(f"Keine reguläre Datei: {reg.relpath(real)}")
         size = os.path.getsize(real)
         if size > MAX_READ_FILE_BYTES:
             raise ValueError(f"Datei zu groß ({_fmt_bytes(size)}, max. {_fmt_bytes(MAX_READ_FILE_BYTES)})")
@@ -708,7 +803,9 @@ def _builtin_tools(reg: ToolRegistry) -> list[Tool]:
             raise IsADirectoryError(f"Ziel ist ein Verzeichnis: {reg.relpath(real)}")
         parent = reg.resolve(os.path.dirname(real) or ".")
         os.makedirs(parent, exist_ok=True)
-        existed = os.path.exists(real)
+        existed = os.path.lexists(real)
+        if existed and not stat.S_ISREG(os.lstat(real).st_mode):
+            raise ValueError(f"Ziel ist keine reguläre Datei: {reg.relpath(real)}")
         with open(real, "wb") as fh:
             fh.write(data)
         return f"geschrieben: {reg.relpath(real)} ({len(data)} Bytes, überschrieben: {'ja' if existed else 'nein'})"
@@ -1014,13 +1111,25 @@ def strip_tool_calls(text: str) -> str:
 
 
 _NEEDS_TOOLS_RE = re.compile(
-    r"\d\s*(?:\*\*|[-+*/×÷^%:])\s*\d|\d\s*%"                # Zahlen mit Operatoren, Prozent
-    r"|\b(?:rechne|berechne|ausrechnen|wie ?viel|wieviel|prozent|wurzel|quadrat)"
-    r"|\b(?:datei|dateien|ordner|verzeichnis|pfad|speicher\w*|lies\b|liest|lese\b|öffne|oeffne)"
-    r"|\b(?:uhrzeit|datum|heute|wochentag|kalenderwoche|wie ?spät|wie ?spaet|zeit\b)"
-    r"|\b(?:system\w*|betriebssystem|arbeitsspeicher|festplatte|prozessor|cpu|ram\b)"
-    r"|\b(?:ausführ\w*|ausfuehr\w*|führe\s+\w*\s*aus|starte|skript|script|python|befehl|kommando|shell|terminal)"
-    r"|\b(?:merk\w*|erinner\w*|gedächtnis|gedaechtnis|vergiss)"
+    # Arithmetik: Zahl Operator Zahl (kein ':' und kein Bindestrich-Bereich wie 3-5 mm), gesprochene Rechnung
+    r"\d\s*(?:\*\*|[+*/×÷^])\s*\d|\d\s+-\s+\d"
+    r"|\d\s*(?:mal|plus|minus|hoch|geteilt durch|durch)\s*\d"
+    r"|\d\s*%\s*(?:von|des|der)\b"
+    r"|\b(?:rechne\w*|berechne\w*|ausrechnen|wie ?viel|wieviel|prozent von|wurzel aus|quadrat von"
+    r"|summe|differenz|produkt|quotient|multiplizier\w*|addier\w*|subtrahier\w*|dividier\w*)\b"
+    # Dateien
+    r"|\b(?:datei|dateien|ordner|verzeichnis|pfad|speicher(?:e|n|t|st)?\b|abspeichern|lies\b|liest|lese\b"
+    r"|öffne|oeffne|schreib\w*\s+(?:in\s+)?(?:die\s+|eine\s+)?datei|erstelle\s+(?:eine\s+)?datei)"
+    # Zeit
+    r"|\b(?:uhrzeit|datum|wochentag|kalenderwoche|wie ?spät|wie ?spaet|welcher\s+tag|welches\s+datum"
+    r"|wie\s+viel\s+uhr)\b"
+    # System
+    r"|\b(?:betriebssystem|arbeitsspeicher|festplatte|prozessor|cpu|ram|systeminfo\w*|system-?status"
+    r"|welches\s+system|mein\s+system|rechner\s+(?:hat|ist))\b"
+    # Ausführung
+    r"|\b(?:ausführ\w*|ausfuehr\w*|führe\s+\w*\s*aus|starte|skript|script|python|befehl|kommando|shell|terminal)\b"
+    # Gedächtnis
+    r"|\b(?:merk(?:e|en|t|st)?\b|erinner\w*|gedächtnis|gedaechtnis|vergiss)"
     # Ingenieur-Rechner, Materialdaten und Dokumente (Phase 2)
     r"|\b(?:material\w*|werkstoff\w*|dichte|festigkeit|e-modul|zugfestigkeit|akku\w*|lipo|flugzeit|schub\w*"
     r"|drehmoment|kabel\w*|awg|umrechn\w*|einheit\w*|spannungsteiler|durchbiegung|querschnitt|propeller"

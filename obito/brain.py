@@ -390,8 +390,15 @@ class Brain:
             if value is None:
                 retried = True
                 self._check_cancel(cancel)
-                hint = {"role": "user", "content": JSON_RETRY_HINT + json.dumps(schema, ensure_ascii=False)}
-                res = self._chat(list(messages) + [hint], max_tokens=max_tokens, model=model, temperature=0.0,
+                # Hinweis an die letzte Nutzer-Nachricht anhängen (keine eigene Nachricht, sonst würde
+                # fit_messages bei knappem Budget die eigentliche Aufgabe statt des Hinweises kürzen)
+                hint = JSON_RETRY_HINT + json.dumps(schema, ensure_ascii=False)
+                retry_msgs = [dict(m) for m in messages]
+                if retry_msgs and retry_msgs[-1].get("role") == "user":
+                    retry_msgs[-1]["content"] = f"{retry_msgs[-1].get('content', '')}\n\n{hint}"
+                else:
+                    retry_msgs.append({"role": "user", "content": hint})
+                res = self._chat(retry_msgs, max_tokens=max_tokens, model=model, temperature=0.0,
                                  json_mode=True)
                 raw = res.text or ""
                 tokens += res.total_tokens
@@ -594,19 +601,23 @@ class Brain:
         elif routing is None:
             summary += " (Heuristik)"
         step = Step("routing", "system", summary, detail=detail,
-                    duration=outcome.duration if outcome else 0.0, tokens=outcome.tokens if outcome else 0)
+                    duration=outcome.duration if outcome else 0.0,
+                    tokens=outcome.tokens if outcome and outcome.value is not None else 0)
         run.steps.append(step)
         self._emit(run.progress, step)
         return depth, hint, tools
 
     def _worker_chat(self, messages: Sequence[dict], max_tokens: int, temperature: float,
-                     cancel: threading.Event | None) -> tuple[ChatResult, float, int]:
-        """Modellaufruf in einem Arbeits-Thread: gestreamt mit internem Zähler, ohne Rückrufe nach außen."""
+                     cancel: threading.Event | None,
+                     stop: threading.Event | None = None) -> tuple[ChatResult, float, int]:
+        """Modellaufruf in einem Arbeits-Thread: gestreamt mit internem Zähler, ohne Rückrufe nach außen.
+        ``stop`` wird vom Gremium gesetzt (Zeitbudget/Abbruch), damit laufende Aufrufe beim nächsten
+        Textstück aussteigen und das Backend freigeben."""
         counter = {"n": 0}
 
         def on_piece(piece: str) -> None:
             counter["n"] += 1
-            if cancel is not None and cancel.is_set():
+            if (cancel is not None and cancel.is_set()) or (stop is not None and stop.is_set()):
                 raise LLMError("Abgebrochen")
 
         t0 = time.time()
@@ -627,15 +638,24 @@ class Brain:
         workers = max(1, min(len(jobs), int(self.cfg.parallel_calls or 1)))
         pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f"obito-{stage}")
         futures: dict = {}
+        stop = threading.Event()
         try:
             for ex, msgs in jobs:
-                futures[pool.submit(self._worker_chat, msgs, max_tokens, ex.temperature, run.cancel)] = ex
+                futures[pool.submit(self._worker_chat, msgs, max_tokens, ex.temperature, run.cancel, stop)] = ex
             pending = set(futures)
             remaining = max(0.05, run.deadline_at - time.time())
             try:
                 for fut in as_completed(futures, timeout=remaining):
                     pending.discard(fut)
                     ex = futures[fut]
+                    if run.cancel is not None and run.cancel.is_set():
+                        stop.set()
+                        for other in pending:
+                            oex = futures[other]
+                            step = Step(stage, oex.id, f"{oex.id} ({oex.name}): Fehler – Abgebrochen", status="fehler")
+                            run.steps.append(step)
+                            self._emit(run.progress, step)
+                        raise LLMError("Abgebrochen")
                     try:
                         res, dur, _chunks = fut.result()
                     except LLMError as e:
@@ -657,6 +677,7 @@ class Brain:
                     run.steps.append(step)
                     self._emit(run.progress, step)
             except FuturesTimeout:
+                stop.set()
                 for fut in pending:
                     ex = futures[fut]
                     step = Step(stage, ex.id,
@@ -667,6 +688,7 @@ class Brain:
                 if first_error is None:
                     first_error = LLMError(f"Zeitbudget ({self.cfg.deadline:.0f} s) überschritten")
         finally:
+            stop.set()      # laufende Aufrufe steigen beim nächsten Textstück aus
             pool.shutdown(wait=False, cancel_futures=True)
         ordered = {ex.id: results[ex.id] for ex, _ in jobs if ex.id in results}
         return ordered, first_error
@@ -710,7 +732,7 @@ class Brain:
             summary = (f"Bewertung {rating if rating is not None else '–'}/10, {n_err} Fehler, "
                        f"{n_con} {'Widerspruch' if n_con == 1 else 'Widersprüche'}")
             step = Step("kritiker", agents.CRITIC.id, summary, detail=outcome.raw, duration=outcome.duration,
-                        tokens=outcome.tokens)
+                        tokens=0 if outcome.value is None else outcome.tokens)
             run.steps.append(step)
             self._emit(run.progress, step)
         else:
@@ -789,7 +811,21 @@ class Brain:
             gate.finish()
             raw = res.text or ""
             calls = parse_tool_calls(raw) if tools_block else []
-            parts.append(strip_tool_calls(raw).strip())
+            if gate.tool_detected:
+                # Gestreamt wurde nur der Text vor dem Block; Prosa nach einem gültigen Block hängen wir an
+                # (und streamen sie nach), Protokollmüll ohne gültigen Aufruf fällt weg.
+                head = gate.emitted
+                tail = strip_tool_calls(raw[len(head):]).strip() if calls else ""
+                if tail:
+                    sep = "\n\n" if head.strip() else ""
+                    joiner.feed(sep + tail)
+                    parts.append((head.rstrip() + sep + tail).strip())
+                else:
+                    parts.append(head.strip())
+            elif calls:
+                parts.append(strip_tool_calls(raw).strip())      # Zaun-Form: Ausnahme von der Invariante
+            else:
+                parts.append(raw.strip())
             joiner.end_part()
             summary = f"{len(raw)} Zeichen"
             if calls:
@@ -898,6 +934,9 @@ class Brain:
                 if m.created_at < run.t0:
                     skip("bereits bekannt", content)
                     continue
+                if any(x.id == m.id for x in run.new_memories):
+                    skip("Duplikat", content)
+                    continue
                 run.new_memories.append(m)
                 details.append(f"gemerkt: {m.short()}")
                 if run.project and m.kind == "entscheidung":
@@ -920,7 +959,7 @@ class Brain:
             else:
                 summary = "übersprungen: nichts Merkwürdiges"
             step = Step("lernen", "system", summary, detail="\n".join(details), duration=time.time() - t0,
-                        tokens=outcome.tokens)
+                        tokens=0 if outcome.value is None else outcome.tokens)
         except Exception as e:  # noqa: BLE001 – Lernen darf die Antwort nie kosten
             step = Step("lernen", "system", f"übersprungen: Fehler – {e}", duration=time.time() - t0,
                         status="fehler")
@@ -977,6 +1016,7 @@ class Brain:
             correction_full = self.rewrite_correction(interaction_id, correction)
 
         # (b) speichern
+        old_rating = int(inter.rating or 0)
         if rating is not None:
             inter = self.learning.rate(interaction_id, rating, comment)
         elif comment:
@@ -991,22 +1031,21 @@ class Brain:
             if lesson is not None:
                 lessons.append(lesson)
 
-        # (d) Gedächtnis-Hygiene
+        # (d) Gedächtnis-Hygiene – nur beim Wechsel der Bewertung, alte Wirkung wird zurückgenommen
         adjusted = 0
-        if rating == 1:
-            for mid in inter.memories_used:
-                if self.memory.get(mid) is not None:
-                    self.memory.update_importance(mid, 0.10)
-                    adjusted += 1
-        elif rating == -1:
-            for mid in inter.memories_used:
-                if self.memory.get(mid) is not None:
-                    self.memory.update_importance(mid, -0.15)
-                    adjusted += 1
-            for mid in inter.new_memories:
-                m = self.memory.get(mid)
-                if m is not None and m.source == "ki" and self.memory.forget(mid):
-                    adjusted += 1
+        deltas = {1: 0.10, -1: -0.15, 0: 0.0}
+        if rating is not None and rating != old_rating:
+            change = deltas[rating] - deltas.get(old_rating, 0.0)
+            if change:
+                for mid in inter.memories_used:
+                    if self.memory.get(mid) is not None:
+                        self.memory.update_importance(mid, change)
+                        adjusted += 1
+            if rating == -1:
+                for mid in inter.new_memories:
+                    m = self.memory.get(mid)
+                    if m is not None and m.source == "ki" and self.memory.forget(mid):
+                        adjusted += 1
         refreshed = self.learning.get(interaction_id)
         return Feedback(interaction=refreshed or inter, lessons=lessons, memories_adjusted=adjusted,
                         correction_full=correction_full)

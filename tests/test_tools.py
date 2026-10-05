@@ -732,7 +732,7 @@ class NeedsToolsTest(unittest.TestCase):
         for q in ("Was ist 12 * 7?", "Rechne 3+4", "Berechne die Fläche", "Wie viel ist 2 hoch 10?",
                   "Wieviel kostet das?", "Lies die Datei notizen.txt", "Zeig mir den Ordner",
                   "Welche Dateien sind im Verzeichnis?", "Wie spät ist es, welche Uhrzeit?",
-                  "Welches Datum haben wir heute?", "Was ist heute los?", "Zeig mir System-Infos",
+                  "Welches Datum haben wir heute?", "Welcher Tag ist heute?", "Zeig mir Systeminfos",
                   "Führe das Skript aus", "Starte den Server", "Speicher das ab", "Öffne die config",
                   "Wie viel Arbeitsspeicher habe ich?", "Merk dir, dass ich Carbon mag",
                   "2+2", "100/4", "Was sind 15% von 200?", "Erinnerst du dich an mein Projekt?",
@@ -742,7 +742,10 @@ class NeedsToolsTest(unittest.TestCase):
     def test_negative(self):
         for q in ("Hallo, wie geht es dir?", "Erkläre mir die Relativitätstheorie",
                   "Schreib ein Gedicht über den Herbst", "Was bedeutet das Wort Melancholie?",
-                  "Warum ist der Himmel blau", "Wer war Lieselotte?", "Ich habe 3 Katzen und 2 Hunde"):
+                  "Warum ist der Himmel blau", "Wer war Lieselotte?", "Ich habe 3 Katzen und 2 Hunde",
+                  "Was ist heute los?", "Welche Merkmale hat ein F7-Flight-Controller?",
+                  "Eine Wandstärke von 3-5 mm reicht", "Welche Zeit braucht der Druck?",
+                  "Die Speicherkarte ist voll"):
             self.assertFalse(needs_tools(q, []), q)
         self.assertFalse(needs_tools("", []))
         self.assertFalse(needs_tools(None, None))  # type: ignore[arg-type]

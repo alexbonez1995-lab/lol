@@ -344,6 +344,12 @@ OMEGA = Expert(
     temperature=0.4,
 )
 
+JSON_RULES = (
+    "Regeln: Deutsch; Zahlen mit Einheiten; keine erfundenen Fakten (Unsicheres als „Unsicher:“ "
+    "markieren); Sicherheit zuerst. Ausgabe ausschließlich ein JSON-Objekt – kein Text davor oder "
+    "danach, kein Markdown."
+)
+
 BASE_RULES = (
     "Du bist Teil von OBITO, einem lokalen KI-Assistenten. Verbindliche Regeln:\n"
     "1. Antworte auf Deutsch, präzise und konkret; keine Floskeln, keine Wiederholung der Frage.\n"
@@ -569,7 +575,8 @@ def resolve_expert_id(value: Any, known: Iterable[str] | None = None) -> str | N
 
 def _resolve_expert_ids(value: Any, known: Iterable[str] | None = None) -> list[str]:
     if isinstance(value, str):
-        parts = [p for p in re.split(r"[,;/\n]+", value) if p.strip()]
+        parts = [p for p in re.split(r"[,;/\n&+]+|\s+(?:und|sowie|and|oder)\s+", value, flags=re.IGNORECASE)
+                 if p.strip()]
         items: list[Any] = parts if len(parts) > 1 else [value]
     elif isinstance(value, dict):
         items = list(value.keys())
@@ -578,10 +585,19 @@ def _resolve_expert_ids(value: Any, known: Iterable[str] | None = None) -> list[
     else:
         items = []
     known_list = list(known) if known is not None else list(EXPERTS.keys())
+    known_upper = {str(k).upper() for k in known_list}
     out: list[str] = []
     for item in items:
         if isinstance(item, dict):
             item = item.get("id") or item.get("experte") or item.get("name")
+        if isinstance(item, str):
+            # alle bekannten IDs im Text einsammeln ("ALPHA und BETA", "Experte GAMMA/IOTA")
+            found = [t for t in re.findall(r"[A-Z][A-Z0-9-]*", item.upper()) if t in known_upper]
+            if found:
+                for eid in found:
+                    if eid not in out:
+                        out.append(eid)
+                continue
         eid = resolve_expert_id(item, known_list)
         if eid and eid not in out:
             out.append(eid)
@@ -761,10 +777,19 @@ def _expert_label(eid: str) -> str:
     return f"{ex.id} ({ex.name})"
 
 
+MAX_ANSWERS_TOTAL_CHARS = 9000     # Budget für alle Expertenantworten zusammen (Kritiker/Synthese)
+MIN_ANSWER_IN_PROMPT = 800
+
+
 def _answers_block(answers: dict[str, str]) -> str:
+    """Expertenantworten für Kritiker/Synthese; das Budget je Antwort skaliert mit der Anzahl,
+    damit fünf Antworten plus Kontext in ``num_ctx`` passen (sonst kappt ``fit_messages``
+    die Aufgabe am Ende der Nutzer-Nachricht)."""
+    n = max(1, len(answers or {}))
+    per = max(MIN_ANSWER_IN_PROMPT, min(MAX_ANSWER_IN_PROMPT, MAX_ANSWERS_TOTAL_CHARS // n))
     chunks = []
     for eid, text in (answers or {}).items():
-        body = clip((_text(text) or "(keine Antwort)"), MAX_ANSWER_IN_PROMPT)
+        body = clip((_text(text) or "(keine Antwort)"), per)
         chunks.append(f"### Antwort von {_expert_label(eid)}\n{body}")
     return "\n\n".join(chunks) if chunks else "(keine Expertenantworten vorhanden)"
 
@@ -829,7 +854,7 @@ def expert_messages(expert: Expert, question: str, context: str, history: Sequen
         f"Frage des Nutzers:\n{clip(question or '', MAX_QUESTION_CHARS)}",
         "Aufgabe: Antworte aus deiner Fachperspektive mit (1) kurzer Analyse, (2) konkreten "
         "Vorschlägen mit Zahlen und Einheiten, (3) Risiken/Fallen, (4) offenen Fragen, falls "
-        "entscheidende Angaben fehlen. Kompakt, höchstens etwa 400 Wörter, keine Einleitung. "
+        "entscheidende Angaben fehlen. Gliedere in: 1) Analyse (2–3 Sätze) 2) Vorschläge mit Zahlen 3) Risiken 4) Offene Fragen (nur falls nötig). Kompakt, höchstens etwa 250 Wörter, keine Einleitung. "
         "Was außerhalb deines Fachgebiets liegt, lässt du weg oder markierst es als „Unsicher:“.",
     )
     return [system, *_history_messages(history), {"role": "user", "content": user}]
@@ -837,14 +862,15 @@ def expert_messages(expert: Expert, question: str, context: str, history: Sequen
 
 def critic_messages(question: str, answers: dict[str, str], context: str) -> list[dict]:
     """Stufe ``kritiker``: prüft alle Expertenantworten, Ausgabe als JSON."""
-    system = _system("kritiker", CRITIC.id, _join(CRITIC.system_prompt, BASE_RULES, context or ""))
+    system = _system("kritiker", CRITIC.id, _join(CRITIC.system_prompt, JSON_RULES, context or ""))
     ids = ", ".join(str(e).upper() for e in (answers or {}).keys()) or "–"
     user = _join(
-        f"Frage des Nutzers:\n{clip(question or '', MAX_QUESTION_CHARS)}",
-        _answers_block(answers),
         "Prüfe jede Antwort auf Rechen- und Einheitenfehler, physikalisch unmögliche oder erfundene "
         "Angaben, unbegründete Annahmen, Sicherheitslücken und Widersprüche zwischen den Experten. "
-        "Nenne, was für eine vollständige Antwort fehlt.\n"
+        "Nenne, was für eine vollständige Antwort fehlt.",
+        f"Frage des Nutzers:\n{clip(question or '', MAX_QUESTION_CHARS)}",
+        _answers_block(answers),
+        "Dein Urteil als JSON.\n"
         f"„experte“ ist eine dieser IDs: {ids}. „schwere“: hoch = Antwort dadurch falsch oder gefährlich, "
         "mittel = wesentliche Ungenauigkeit, niedrig = Schönheitsfehler. „bewertung“ 1–10 für die "
         "Gesamtqualität aller Antworten, „sicher“ true, wenn du dir bei deinem Urteil sicher bist.",
@@ -885,7 +911,7 @@ def revision_messages(expert: Expert, question: str, previous: str, critique_ite
         "Aufgabe: Überarbeite deine Antwort. Behebe jeden Befund, dem du zustimmst, und sage bei "
         "Befunden, denen du begründet widersprichst, kurz warum. Gib die vollständige überarbeitete "
         "Antwort aus (kein Änderungsprotokoll, kein Verweis auf die alte Fassung), gleicher Umfang "
-        "wie zuvor, höchstens etwa 400 Wörter.",
+        "wie zuvor, höchstens etwa 250 Wörter.",
     )
     return [system, {"role": "user", "content": user}]
 
@@ -945,15 +971,16 @@ def synthesis_messages(question: str, answers: dict[str, str], critique: dict | 
                          "Der Kritiker lieferte keine verwertbare Kritik – prüfe die Antworten selbst "
                          "auf Fehler und Widersprüche.")
     user = _join(
-        f"Frage des Nutzers:\n{clip(question or '', MAX_QUESTION_CHARS)}",
-        "Antworten des Expertengremiums:\n\n" + _answers_block(answers),
-        critique_part,
         "Aufgabe: Schreibe die endgültige Antwort direkt an den Nutzer – eine einzige, in sich "
         "stimmige Antwort in gutem Deutsch. Übernimm das Richtige, verwirf das Falsche, löse "
         "Widersprüche begründet, nenne Zahlen mit Einheiten und markiere Offenes mit „Unsicher:“. "
         "Beschreibe nicht den internen Ablauf und zähle die Experten nicht einzeln auf; eine kurze "
         "Nennung unterschiedlicher Sichtweisen ist erlaubt, wenn sie dem Nutzer hilft. Wichtigste "
         "Aussage zuerst, dann Details, zum Schluss nächste Schritte oder gezielte Rückfragen.",
+        f"Frage des Nutzers:\n{clip(question or '', MAX_QUESTION_CHARS)}",
+        critique_part,
+        "Antworten des Expertengremiums:\n\n" + _answers_block(answers),
+        "Jetzt die endgültige Antwort an den Nutzer:",
     )
     return [system, *example_messages(examples or []), *_history_messages(history),
             {"role": "user", "content": user}]
@@ -984,7 +1011,7 @@ def tool_result_message(name: str, result: "ToolResult") -> dict:
 
 
 def memory_extraction_messages(question: str, answer: str, project: str | None) -> list[dict]:
-    """Stufe ``extraktion``: dauerhaft merkwürdige Fakten aus einer Interaktion als JSON."""
+    """Stufe ``extraktion``: dauerhaft merkenswerte Fakten aus einer Interaktion als JSON."""
     kinds = ", ".join(KINDS)
     body = (
         "Du bist das Gedächtnis-Modul von OBITO. Du liest eine Frage und die gegebene Antwort und "
@@ -995,7 +1022,7 @@ def memory_extraction_messages(question: str, answer: str, project: str | None) 
         "Vermutungen der KI, Unsicheres, Wiederholungen. Jeder Eintrag: ein eigenständiger, konkreter "
         "Satz (12–300 Zeichen) in der dritten Person, mit Zahlen und Einheiten.\n"
         f"„art“ ist eine von: {kinds}. „wichtigkeit“ 0–1 (0,9 = zentrale Projektvorgabe, 0,4 = "
-        "Randnotiz). Höchstens 3 Einträge; wenn nichts Merkwürdiges enthalten ist: "
+        "Randnotiz). Höchstens 3 Einträge. Gibt es nichts, das man sich dauerhaft merken sollte, antworte genau mit "
         "{\"erinnerungen\": []}."
     )
     user = _join(
@@ -1318,13 +1345,14 @@ def _to_bool(value: Any, default: bool | None = False) -> bool | None:
     return default
 
 
-def _to_str_list(value: Any, max_len: int = 500) -> list[str]:
-    """Einzelstring → Liste; Listen bereinigt (Strings, Zahlen, Objekte als Text); Duplikate weg."""
+def _to_str_list(value: Any, max_len: int = 500, split_single: bool = False) -> list[str]:
+    """Einzelstring → Liste; Listen bereinigt (Strings, Zahlen, Objekte als Text); Duplikate weg.
+    ``split_single``: einen einzelnen String an Kommas/Semikolons/Schrägstrichen teilen (Tags, Themen)."""
     items: list[Any]
     if value is None:
         return []
     if isinstance(value, str):
-        items = [value]
+        items = [p for p in re.split(r"[,;/|\n]+", value) if p.strip()] if split_single else [value]
     elif isinstance(value, dict):
         items = [f"{k}: {_text(v)}" if _text(v) else str(k) for k, v in value.items()]
     elif isinstance(value, (list, tuple, set)):
@@ -1373,14 +1401,22 @@ def parse_routing(text: Any, known_ids: Iterable[str] | None = None) -> dict | N
 
 
 _SEVERITY_MAP = (
-    (re.compile(r"hoch|high|kritisch|critical|schwer|gravierend|fatal|major|3"), "hoch"),
-    (re.compile(r"niedrig|gering|low|minor|klein|leicht|unwichtig|1"), "niedrig"),
-    (re.compile(r"mittel|medium|moderat|normal|2"), "mittel"),
+    # Reihenfolge: mittel vor niedrig vor hoch, damit „mittelschwer“ mittel bleibt; „nicht hoch“ zählt nicht
+    (re.compile(r"\bmittel\w*|\bmedium\b|\bmoderat\w*|\bnormal\b"), "mittel"),
+    (re.compile(r"\bniedrig\w*|\bgering\w*|\blow\b|\bminor\b|\bklein\w*|\bleicht\w*|\bunwichtig\w*"), "niedrig"),
+    (re.compile(r"(?<!nicht )(?:\bhoch\b|\bhigh\b|\bkritisch\w*|\bcritical\b|\bgravierend\w*|\bfatal\b|\bmajor\b"
+                r"|\bschwerwiegend\w*)"), "hoch"),
 )
 
 
 def _severity(value: Any) -> str:
-    s = _fold(value)
+    if isinstance(value, bool):
+        return "mittel"
+    if isinstance(value, (int, float)):
+        value = str(int(round(value)))
+    s = _fold(value).strip()
+    if s.isdigit():
+        return {"1": "niedrig", "2": "mittel", "3": "hoch"}.get(s, "mittel")
     for rx, name in _SEVERITY_MAP:
         if rx.search(s):
             return name
@@ -1404,7 +1440,22 @@ def parse_critique(text: Any, expert_ids: Iterable[str] | None = None) -> dict |
     rating = _to_int(_get(d, "bewertung", "score", "note", "punkte", "rating", "gesamt"), 1, 10)
 
     errors_raw = _get(d, "fehler", "errors", "probleme", "maengel", "mangel", "befunde", "issues", default=[])
-    if isinstance(errors_raw, (str, dict)):
+    if isinstance(errors_raw, dict):
+        inner = _dict(errors_raw) or {}
+        if any(k in inner for k in ("problem", "fehler", "beschreibung", "text", "issue", "korrektur", "aussage")):
+            errors_raw = [errors_raw]                      # ein einzelner Befund
+        else:
+            # Befunde als Objekt je Experte: {"ALPHA": "…", "BETA": ["…", "…"], "GAMMA": {"problem": …}}
+            flat: list[Any] = []
+            for who, val in errors_raw.items():
+                if isinstance(val, dict):
+                    flat.append({"experte": who, **val})
+                elif isinstance(val, (list, tuple)):
+                    flat.extend({"experte": who, "problem": _text(v)} for v in val if _text(v))
+                elif _text(val):
+                    flat.append({"experte": who, "problem": _text(val)})
+            errors_raw = flat
+    elif isinstance(errors_raw, str):
         errors_raw = [errors_raw]
     errors: list[dict] = []
     if isinstance(errors_raw, (list, tuple)):
@@ -1454,13 +1505,17 @@ def parse_memories(text: Any) -> list[dict]:
         items = obj
     else:
         return []
-    if isinstance(items, dict):
+    if isinstance(items, (dict, str)):
         items = [items]
     if not isinstance(items, list):
         return []
     out: list[dict] = []
     seen: set[str] = set()
     for it in items:
+        if isinstance(it, str):
+            if len(it.strip()) < 12:
+                continue                            # zu kurz für einen Fakt (Müll)
+            it = {"inhalt": it}                     # kleine Modelle liefern gern nackte Strings
         if not isinstance(it, dict):
             continue
         item = _dict(it) or {}
@@ -1471,7 +1526,8 @@ def parse_memories(text: Any) -> list[dict]:
         kind = kind if kind in KINDS else next((k for k in KINDS if kind.startswith(k[:5])), "notiz")
         importance = _to_float(_get(item, "wichtigkeit", "importance", "gewicht", "relevanz", "prioritaet"))
         importance = 0.5 if importance is None else max(0.0, min(1.0, importance))
-        tags = [t.lower() for t in _to_str_list(_get(item, "tags", "tag", "schlagworte", "stichworte", default=[]), 40)]
+        tags = [t.lower() for t in _to_str_list(_get(item, "tags", "tag", "schlagworte", "stichworte", default=[]), 40,
+                                                split_single=True)]
         norm = content.lower()
         if norm in seen:
             continue
@@ -1493,7 +1549,7 @@ def parse_lesson(text: Any) -> dict | None:
     if not rule:
         return None
     topics = [t.lower() for t in _to_str_list(_get(d, "gilt_fuer", "gilt_fur", "themen", "topics", "bereiche",
-                                                   "stichworte", "scope", default=[]), 60)]
+                                                   "stichworte", "scope", default=[]), 60, split_single=True)]
     general = _to_bool(_get(d, "allgemein", "general", "generell", "global", "immer"), default=False)
     return {"regel": clip(rule, MAX_LESSON_CHARS), "gilt_fuer": topics, "allgemein": bool(general)}
 

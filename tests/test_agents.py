@@ -436,7 +436,7 @@ class PromptBuildersTest(unittest.TestCase):
             self.assertTrue(user.startswith(f"Du antwortest als Experte {ex.id} – {ex.name}: {ex.role}"), user[:80])
             self.assertIn(ex.system_prompt, user)
             self.assertIn("Frage", user)
-            self.assertIn("400 Wörter", user)
+            self.assertIn("250 Wörter", user)
             self.assertIn("Risiken", user)
         self.assertEqual(len(set(systems.values())), 1)
         prefix = next(iter(systems.values()))
