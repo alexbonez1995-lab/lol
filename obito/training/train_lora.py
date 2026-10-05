@@ -319,8 +319,14 @@ def resolve_base(basis: str) -> tuple[str, str | None]:
     b = (basis or "").strip()
     if not b:
         raise ValueError("Keine Basis: --basis HF-ID, Pfad oder Ollama-Tag angeben (z. B. qwen2.5:7b).")
-    if os.path.isdir(b):
-        return b, ollama_base_for(b)
+    expanded = os.path.expanduser(b)
+    if os.path.isdir(expanded):
+        return expanded, ollama_base_for(b)
+    looks_like_path = (b.startswith((".", "~", "/")) or "\\" in b or b.lower().endswith(".gguf")
+                       or b.count("/") > 1 or re.match(r"^[A-Za-z]:", b) is not None)
+    if looks_like_path:
+        # Sieht wie ein Pfad aus, existiert aber nicht – nie still auf einen HF-Download umleiten
+        raise FileNotFoundError(f"Basis-Verzeichnis nicht gefunden: {b}")
     hf = hf_base_for(b)
     if hf:
         tag = next((t for t, h in BASE_MAP.items() if h == hf), b)
@@ -615,18 +621,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     tracker = LossTracker(args.epochen)
     t0 = time.time()
 
-    common_args: dict[str, Any] = dict(
-        output_dir=ausgabe, num_train_epochs=args.epochen, learning_rate=args.lr,
-        per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
-        gradient_accumulation_steps=args.grad_akkum, gradient_checkpointing=True,
-        lr_scheduler_type="cosine", warmup_ratio=0.03, weight_decay=0.0,
-        logging_strategy="epoch", save_strategy="epoch" if eval_rows else "no", save_total_limit=2,
-        eval_strategy="epoch" if eval_rows else "no",
-        load_best_model_at_end=bool(eval_rows), metric_for_best_model="eval_loss" if eval_rows else None,
-        greater_is_better=False if eval_rows else None,
-        bf16=bf16, fp16=not bf16 and cuda, optim="paged_adamw_8bit" if use_qlora else "adamw_torch",
-        report_to=[], remove_unused_columns=False, seed=42, dataloader_pin_memory=False,
-    )
+    def _common_args(has_eval: bool) -> dict[str, Any]:
+        """``TrainingArguments`` – die Eval-Schalter richten sich nach dem, was nach dem Tokenisieren
+        tatsächlich an Eval-Daten übrig ist (sonst wirft der Trainer nach dem Laden der Gewichte)."""
+        return dict(
+            output_dir=ausgabe, num_train_epochs=args.epochen, learning_rate=args.lr,
+            per_device_train_batch_size=args.batch, per_device_eval_batch_size=args.batch,
+            gradient_accumulation_steps=args.grad_akkum, gradient_checkpointing=True,
+            lr_scheduler_type="cosine", warmup_ratio=0.03, weight_decay=0.0,
+            logging_strategy="epoch", save_strategy="epoch" if has_eval else "no", save_total_limit=2,
+            eval_strategy="epoch" if has_eval else "no",
+            load_best_model_at_end=bool(has_eval), metric_for_best_model="eval_loss" if has_eval else None,
+            greater_is_better=False if has_eval else None,
+            bf16=bf16, fp16=not bf16 and cuda, optim="paged_adamw_8bit" if use_qlora else "adamw_torch",
+            report_to=[], remove_unused_columns=False, seed=42, dataloader_pin_memory=False,
+        )
+
+    def _tokenize_rows(rows: list[dict], label: str) -> tuple[list[dict], int, int]:
+        """Baut Beispiele; Zeilen, die die Chat-Vorlage ablehnt oder die nicht passen, werden gezählt."""
+        examples: list[dict] = []
+        too_long = rejected = 0
+        for i, r in enumerate(rows, 1):
+            if "messages" not in r:
+                continue
+            try:
+                ex = build_example(tokenizer, r["messages"], args.max_laenge)
+            except Exception as e:  # noqa: BLE001 – z. B. jinja2 TemplateError bei falscher Rollenfolge
+                rejected += 1
+                _warn(f"{label}-Zeile {i}: Chat-Vorlage lehnt das Beispiel ab ({str(e)[:120]}).")
+                continue
+            if ex is None:
+                too_long += 1
+                continue
+            examples.append(ex)
+        return examples, too_long, rejected
 
     if args.dpo:
         _say("DPO-Training (trl) …")
@@ -635,33 +663,51 @@ def main(argv: Sequence[str] | None = None) -> int:
         eval_ds = datasets.Dataset.from_list([{k: r[k] for k in ("prompt", "chosen", "rejected")} for r in eval_pairs]) or None
         if eval_ds is not None and len(eval_ds) == 0:
             eval_ds = None
-        dpo_kw = dict(common_args)
+        if eval_rows and eval_ds is None:
+            _warn("Alle Eval-Paare verworfen – Training ohne Eval.")
+        dpo_kw = _common_args(eval_ds is not None)
         dpo_kw.update(beta=0.1, max_length=args.max_laenge, max_prompt_length=max(64, args.max_laenge // 2))
-        try:
-            dpo_config = trl.DPOConfig(**dpo_kw)
-        except TypeError:
-            for k in ("max_length", "max_prompt_length", "beta", "eval_strategy"):
-                dpo_kw.pop(k, None)
-            dpo_config = trl.DPOConfig(**dpo_kw)
+        dpo_config = None
+        for _attempt in range(6):
+            try:
+                dpo_config = trl.DPOConfig(**dpo_kw)
+                break
+            except TypeError as e:
+                # unbekanntes Schlüsselwort je nach trl-Version entfernen – nur das genannte, nie Abhängiges
+                msg = str(e)
+                if "eval_strategy" in msg and "eval_strategy" in dpo_kw:
+                    dpo_kw["evaluation_strategy"] = dpo_kw.pop("eval_strategy")
+                    continue
+                removed = False
+                for k in ("max_length", "max_prompt_length", "beta"):
+                    if k in msg and k in dpo_kw:
+                        dpo_kw.pop(k)
+                        removed = True
+                        break
+                if not removed:
+                    raise
+        if dpo_config is None:
+            raise SystemExit("Abbruch: trl.DPOConfig akzeptiert die Trainingsparameter nicht – trl aktualisieren.")
         trainer = trl.DPOTrainer(model=model, ref_model=None, args=dpo_config, train_dataset=train_ds,
                                  eval_dataset=eval_ds, processing_class=tokenizer)
         trainer.add_callback(_make_callback(transformers, tracker))
         n_train, n_eval = len(train_ds), len(eval_ds) if eval_ds is not None else 0
     else:
         _say("Tokenisiere Beispiele …")
-        train_ex = [build_example(tokenizer, r["messages"], args.max_laenge) for r in train_rows]
-        eval_ex = [build_example(tokenizer, r["messages"], args.max_laenge) for r in eval_rows if "messages" in r]
-        skipped = sum(1 for e in train_ex if e is None)
-        train_ex = [e for e in train_ex if e is not None]
-        eval_ex = [e for e in eval_ex if e is not None]
+        train_ex, skipped, rejected = _tokenize_rows(train_rows, "Trainings")
+        eval_ex, _eval_skipped, _eval_rejected = _tokenize_rows(eval_rows, "Eval")
         if skipped:
             _warn(f"{skipped} Beispiel(e) übersprungen: Zielantwort länger als --max-laenge {args.max_laenge}.")
+        if rejected:
+            _warn(f"{rejected} Beispiel(e) von der Chat-Vorlage abgelehnt.")
+        if eval_rows and not eval_ex:
+            _warn("Alle Eval-Beispiele verworfen – Training ohne Eval.")
         if len(train_ex) < MIN_EXAMPLES and not args.erzwingen:
             raise SystemExit(f"Abbruch: nach dem Tokenisieren bleiben nur {len(train_ex)} Beispiele (< {MIN_EXAMPLES}). "
                              "Erhöhe --max-laenge oder kürze die Antworten.")
         if not train_ex:
             raise SystemExit("Abbruch: kein Beispiel passt in --max-laenge.")
-        training_args = _training_arguments(transformers, **common_args)
+        training_args = _training_arguments(transformers, **_common_args(bool(eval_ex)))
         trainer = transformers.Trainer(
             model=model, args=training_args, train_dataset=_ListDataset(train_ex),
             eval_dataset=_ListDataset(eval_ex) if eval_ex else None,

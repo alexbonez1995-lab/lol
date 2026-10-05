@@ -510,7 +510,7 @@ def _pairwise_verdict(backend: LLMBackend, judge_model: str, frage: str, erwarte
     first, w1 = _judge(backend, judge_model, pairwise_messages(frage, erwartet, a, b), schema, parse_pairwise, seed, None)
     second, w2 = _judge(backend, judge_model, pairwise_messages(frage, erwartet, b, a), schema, parse_pairwise, seed, None)
     if first is None or second is None:
-        return "unklar", w1 or w2
+        return "fehler", w1 or w2 or "Richter lieferte kein verwertbares Urteil"
     v1, v2 = first["besser"], second["besser"]
     if v1 == 1 and v2 == 2:
         return "A", None
@@ -553,7 +553,7 @@ def compare(report_a: dict, report_b: dict, *, backend: LLMBackend | None = None
             judge_active = True
 
     items: list[dict] = []
-    siege_a = siege_b = gleich = inkonsistent = 0
+    siege_a = siege_b = gleich = inkonsistent = richter_fehler = 0
     for frage in common:
         ra, rb = rows_a[frage], rows_b[frage]
         row = {
@@ -573,6 +573,8 @@ def compare(report_a: dict, report_b: dict, *, backend: LLMBackend | None = None
                 siege_a += 1
             elif verdict == "B":
                 siege_b += 1
+            elif verdict == "fehler":
+                richter_fehler += 1
             else:
                 gleich += 1
                 if verdict == "unklar":
@@ -606,6 +608,8 @@ def compare(report_a: dict, report_b: dict, *, backend: LLMBackend | None = None
                          f"bei n={n} (Differenz {diff} > √n ≈ {root:.1f}).")
         if inkonsistent:
             hints.append(f"{inkonsistent} Urteil(e) kippten mit der Reihenfolge und zählen als »gleich«.")
+        if richter_fehler:
+            hints.append(f"{richter_fehler} Frage(n) ohne Richterurteil (Fehler) – nicht gewertet.")
     else:
         if not any("Richter" in h for h in hints):
             hints.append("Ohne Richter: nur deterministischer Stichwort-Vergleich (Siege werden nicht gezählt).")
@@ -620,6 +624,7 @@ def compare(report_a: dict, report_b: dict, *, backend: LLMBackend | None = None
         "siege_b": siege_b,
         "gleich": gleich,
         "inkonsistent": inkonsistent,
+        "richter_fehler": richter_fehler,
         "stichwort_delta": stichwort_delta,
         "dauer_delta": dauer_delta,
         "tokens_delta": tokens_delta,

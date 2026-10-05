@@ -617,8 +617,11 @@ class CompareTest(unittest.TestCase):
         def responder(msgs, kw):
             raise LLMError("kaputt")
         res = compare(self.a, self.b, backend=FakeBackend(responder=responder), judge_model="richter")
-        self.assertEqual(res["gleich"], 4)
+        self.assertEqual(res["gleich"], 0)                 # Richterfehler zählen nicht als »gleich«
+        self.assertEqual(res["richter_fehler"], 4)
+        self.assertTrue(all(i["richter"] == "fehler" for i in res["items"]))
         self.assertIn("kaputt", res["hinweis"])
+        self.assertIn("ohne Richterurteil", res["hinweis"])
 
 
 class LocalJudgeHelpersTest(unittest.TestCase):

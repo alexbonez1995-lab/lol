@@ -39,6 +39,7 @@ MAX_GENERAL_LESSONS = 2
 MIN_OWN_EXAMPLES = 20
 OWN_PER_CORRECTION = 3
 MAX_KEYWORDS = 8
+MIN_EXAMPLE_ANSWER_CHARS = 40     # kürzere „beste Antworten“ taugen nicht als Few-Shot-Beispiel
 MIN_KEYWORD_CHARS = 5
 
 # Fallback, falls ``obito.training.modelfile`` (parallel entwickelt) nicht importierbar ist.
@@ -227,7 +228,8 @@ def _int_list(items: Iterable[Any] | None) -> list[int]:
 
 
 def _history_list(history: Iterable[Any] | None) -> list[dict]:
-    """Nur ``{"role", "content"}`` mit Rollen user/assistant und nicht-leerem Text."""
+    """Nur ``{"role", "content"}`` mit Rollen user/assistant und nicht-leerem Text – streng
+    abwechselnd und mit ``user`` beginnend (Chat-Vorlagen von Mistral/Gemma lehnen anderes ab)."""
     out: list[dict] = []
     for m in history or ():
         if not isinstance(m, dict):
@@ -236,7 +238,14 @@ def _history_list(history: Iterable[Any] | None) -> list[dict]:
         content = m.get("content")
         if role not in ("user", "assistant") or not isinstance(content, str) or not content.strip():
             continue
+        if not out and role == "assistant":
+            continue                                   # führende Assistant-Nachricht weglassen
+        if out and out[-1]["role"] == role:
+            out[-1]["content"] += "\n\n" + content     # gleiche Rollen zusammenführen
+            continue
         out.append({"role": role, "content": content})
+    if out and out[-1]["role"] == "user":
+        out.pop()                                      # Verlauf endet vor der eigentlichen Frage
     return out
 
 
@@ -627,6 +636,15 @@ class LearningStore:
         with self._lock:
             dup = self._db.execute("SELECT * FROM lessons WHERE norm = ?", (norm,)).fetchone()
             if dup is not None:
+                if not dup["active"]:
+                    # Erneut gelernt: deaktivierte Lektion wieder aktivieren, Schaden-Zähler zurücksetzen
+                    self._db.execute(
+                        "UPDATE lessons SET active = 1, hurt = 0, scope = ?, topics = CASE WHEN ? != '' THEN ? ELSE topics END,"
+                        " source_interaction = COALESCE(?, source_interaction) WHERE id = ?",
+                        (scope, topic_str, topic_str, source_interaction, dup["id"]),
+                    )
+                    self._db.commit()
+                    dup = self._db.execute("SELECT * FROM lessons WHERE id = ?", (dup["id"],)).fetchone()
                 return self._lesson(dup)
         emb = self._embed([rule + (" " + topic_str.replace(",", " ") if topic_str else "")])
         emb_json = json.dumps(emb[0]) if emb else None
@@ -758,7 +776,10 @@ class LearningStore:
                 continue
             it = self._interaction(c["row"])
             best = strip_tool_blocks(it.best_answer())
-            if not best:
+            if not best.strip():
+                continue
+            if it.correction and not it.correction_full and len(best.strip()) < MIN_EXAMPLE_ANSWER_CHARS:
+                # Kurze Korrekturnotizen („Nein, 45 g.“) taugen nicht als Few-Shot-Antwort
                 continue
             scored.append((relevance, 1 if it.correction else 0, it.id, it))
         scored.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)

@@ -83,7 +83,7 @@ def memory_to_dict(m: Memory) -> dict:
 
 
 def _dumps(payload: Any) -> bytes:
-    return json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+    return json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8", errors="replace")
 
 
 class _HttpError(Exception):
@@ -168,6 +168,17 @@ class ObitoServer(ThreadingHTTPServer):
         allowed = {"127.0.0.1", "localhost", "[::1]"}
         h = host.strip().lower()
         allowed.add(f"[{h}]" if ":" in h and not h.startswith("[") else h)
+        # Wildcard-Bindung: Anfragen aus dem LAN tragen die LAN-IP bzw. den Rechnernamen im Host-Header
+        self.wildcard = h in ("", "0.0.0.0", "::", "[::]")
+        if self.wildcard:
+            try:
+                name = socket.gethostname()
+                allowed.add(name.lower())
+                for info in socket.getaddrinfo(name, None):
+                    ip = info[4][0]
+                    allowed.add(f"[{ip}]" if ":" in ip else ip)
+            except OSError:
+                pass
         self.allowed_hosts: frozenset[str] = frozenset(allowed)
 
         # Werkzeug-Freigabe: ohne Terminal keine Rückfrage möglich -> pauschal ja/nein.
@@ -241,7 +252,13 @@ class ObitoServer(ThreadingHTTPServer):
             return False
         host, port = parsed
         if host not in self.allowed_hosts:
-            return False
+            if not getattr(self, "wildcard", False):
+                return False
+            # IP-Literale können nicht per DNS-Rebinding untergeschoben werden
+            try:
+                ipaddress.ip_address(host.strip("[]"))
+            except ValueError:
+                return False
         return port is None or port == self.port
 
     def origin_allowed(self, origin: str) -> bool:
@@ -395,6 +412,10 @@ class ObitoHandler(BaseHTTPRequestHandler):
                 allowed.append(method)
                 if method == self.command:
                     handler_name, match = name, m
+            if not allowed or handler_name is None or match is None:
+                # Körper auch bei 404/405 verbrauchen, sonst wird er auf einer Keep-Alive-Verbindung
+                # als nächste Anfrage gelesen (Request-Smuggling)
+                self._discard_body()
             if not allowed:
                 raise _HttpError(404, f"Nicht gefunden: {path}")
             if handler_name is None or match is None:
@@ -403,6 +424,8 @@ class ObitoHandler(BaseHTTPRequestHandler):
             self.body = self._read_body()
             getattr(self, handler_name)(*match.groups())
         except _HttpError as e:
+            if not getattr(self, "_body_consumed", False) and int(self.headers.get("Content-Length") or 0) > 0:
+                self.close_connection = True
             self._fail(e.status, e.message, e.headers)
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             self.close_connection = True
@@ -448,10 +471,17 @@ class ObitoHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             raise _HttpError(411, "Content-Length erforderlich")
 
+    def _discard_body(self) -> None:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(length)
+        self._body_consumed = True
+
     def _read_body(self) -> dict | None:
         """Liest den JSON-Körper eines POST (``None`` bei GET/DELETE oder leerem Körper)."""
         length = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(length) if length else b""
+        self._body_consumed = True
         if self.command != "POST":
             return None
         if not raw.strip():
@@ -462,8 +492,14 @@ class ObitoHandler(BaseHTTPRequestHandler):
             raise _HttpError(400, "Körper ist kein gültiges UTF-8") from None
         except json.JSONDecodeError as e:
             raise _HttpError(400, f"Ungültiges JSON: {e.msg} (Position {e.pos})") from None
+        except (ValueError, RecursionError):
+            raise _HttpError(400, "Ungültiges JSON (zu tief verschachtelt oder zu große Zahl)") from None
         if not isinstance(data, dict):
             raise _HttpError(400, "JSON-Objekt erwartet")
+        try:
+            json.dumps(data, ensure_ascii=False).encode("utf-8")
+        except UnicodeEncodeError:
+            raise _HttpError(400, "Ungültige Zeichen (einsame Surrogate) im JSON") from None
         return data
 
     # ------------------------------------------------------- Validierung
@@ -491,11 +527,14 @@ class ObitoHandler(BaseHTTPRequestHandler):
                 raise _HttpError(400, f"Feld »{key}« fehlt")
             return None
         if isinstance(value, bool) or not isinstance(value, int):
-            if isinstance(value, str) and value.strip().lstrip("-").isdigit():
-                return int(value)
-            if isinstance(value, float) and value.is_integer():
-                return int(value)
-            raise _HttpError(400, f"Feld »{key}« muss eine ganze Zahl sein")
+            if isinstance(value, str) and value.strip().lstrip("-").isdigit() and len(value.strip()) <= 18:
+                value = int(value)
+            elif isinstance(value, float) and value.is_integer():
+                value = int(value)
+            else:
+                raise _HttpError(400, f"Feld »{key}« muss eine ganze Zahl sein")
+        if abs(value) >= 2 ** 63:
+            raise _HttpError(400, f"Feld »{key}« ist zu groß")
         return value
 
     @staticmethod
