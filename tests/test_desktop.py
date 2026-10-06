@@ -214,5 +214,37 @@ class CliAppTest(unittest.TestCase):
         self.assertTrue(calls["open_browser"])
 
 
+class PackagedEntryTest(unittest.TestCase):
+    def test_entry_delegates_to_cli_with_app_default(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("obito_app", Path(__file__).resolve().parent.parent / "packaging" / "obito_app.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        from obito import cli
+        calls = []
+        orig_main, orig_argv, orig_env = cli.main, sys.argv, os.environ.get("OBITO_CONFIG")
+        cli.main = lambda argv: calls.append(list(argv)) or 0
+        try:
+            sys.argv = ["OBITO.exe"]
+            self.assertEqual(mod.main(), 0)
+            sys.argv = ["OBITO.exe", "doctor", "--training"]
+            self.assertEqual(mod.main(), 0)
+        finally:
+            cli.main, sys.argv = orig_main, orig_argv
+            if orig_env is None:
+                os.environ.pop("OBITO_CONFIG", None)
+        self.assertEqual(calls, [["app"], ["doctor", "--training"]])
+
+    def test_spec_file_references_existing_files(self):
+        root = Path(__file__).resolve().parent.parent
+        spec = (root / "packaging" / "obito.spec").read_text(encoding="utf-8")
+        for rel in ("obito/static/index.html", "beispiele/eval_fragen.jsonl", "obito.example.json", "packaging/obito_app.py"):
+            self.assertTrue((root / rel).is_file(), rel)
+        self.assertIn("obito_app.py", spec)
+        self.assertIn('name="OBITO"', spec)
+        bat = (root / "build_exe.bat").read_text(encoding="utf-8")
+        self.assertIn("packaging\\obito.spec", bat)
+
+
 if __name__ == "__main__":
     unittest.main()

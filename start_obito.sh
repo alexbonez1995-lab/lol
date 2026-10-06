@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OBITO v4.0 – Starter für Linux/macOS: Ollama prüfen/starten, Systemcheck, Server, HUD öffnen.
+# OBITO v4.0 – Starter für Linux/macOS: Ollama prüfen/starten, Systemcheck, App (Server + HUD-Fenster).
 set -u
 cd "$(dirname "$0")"
 
@@ -39,17 +39,6 @@ if ! "$PY" -m obito doctor; then
   [[ "${antwort,,}" == j* ]] || exit 1
 fi
 
-if ! reachable "$OBITO_URL/api/status"; then
-  info "Starte OBITO-Server unter $OBITO_URL …"
-  nohup "$PY" -m obito serve >/tmp/obito-server.log 2>&1 &
-  for _ in $(seq 1 30); do reachable "$OBITO_URL/api/status" && break; sleep 1; done
-  reachable "$OBITO_URL/api/status" || { err "Server antwortet nicht (siehe /tmp/obito-server.log)."; exit 1; }
-else
-  info "OBITO-Server läuft bereits."
-fi
-ok "OBITO bereit: $OBITO_URL"
-
-if command -v xdg-open >/dev/null 2>&1; then xdg-open "$OBITO_URL" >/dev/null 2>&1 &
-elif command -v open >/dev/null 2>&1; then open "$OBITO_URL"
-else info "Öffne im Browser: $OBITO_URL"; fi
-echo "OBITO läuft. Server-Log: /tmp/obito-server.log"
+if reachable "$OBITO_URL/api/status"; then info "Ein OBITO-Server läuft bereits – es wird nur das Fenster geöffnet."; fi
+ok "Starte OBITO: $OBITO_URL (Server + HUD-Fenster; Fenster schließen oder Strg+C beendet)"
+exec "$PY" -m obito app

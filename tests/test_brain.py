@@ -1073,7 +1073,8 @@ class ManagementTest(BrainTestBase):
         s = brain.status()
         self.assertEqual(set(s), {"backend", "verfuegbar", "modell", "routing_modell", "embedding_aktiv", "modelle",
                                   "gedaechtnis", "lernen", "werkzeuge", "beschaeftigt", "tiefe", "datenverzeichnis",
-                                  "vektoren", "wissen", "projekte", "missionen", "automationen"})
+                                  "vektoren", "wissen", "projekte", "missionen", "automationen",
+                                  "geraete", "modelle3d", "geo", "online"})
         self.assertEqual(s["missionen"], {"laufend": [], "anzahl": 0})
         self.assertFalse(s["automationen"]["aktiv"])
         self.assertIn("dokumente", s["wissen"])

@@ -550,8 +550,16 @@ def memory() -> dict:
 def disk(path: str | None = None) -> dict:
     """Platte des Datenträgers von ``path`` (Standard: Arbeitsverzeichnis) über ``shutil.disk_usage``."""
     target = path or os.getcwd()
+    probe = target
+    for _ in range(32):                      # noch nicht angelegtes Datenverzeichnis → Elternpfad
+        if os.path.exists(probe):
+            break
+        parent = os.path.dirname(probe.rstrip("/\\")) or probe
+        if parent == probe:
+            break
+        probe = parent
     try:
-        usage = shutil.disk_usage(target)
+        usage = shutil.disk_usage(probe)
     except (OSError, ValueError) as e:
         log.debug("disk_usage(%s) fehlgeschlagen: %s", target, e)
         return {"pfad": target, "gesamt_bytes": None, "frei_bytes": None, "belegt_prozent": None}

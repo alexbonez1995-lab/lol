@@ -20,7 +20,8 @@ from .brain import Brain
 from .config import Config, find_config_file, save_config
 from .llm import LLMBackend, LLMError, ModelInfo, ModelNotFound
 
-COMMANDS = ("wissen", "projekt", "mission", "automation", "modelle", "rechner")
+COMMANDS = ("wissen", "projekt", "mission", "automation", "modelle", "rechner",
+            "system", "geraete", "modell3d", "simulation", "geo")
 
 AUTOMATION_KINDS = ("gedaechtnis_konsolidieren", "backup", "eval", "wissen_sync", "mission", "werkzeug")
 MISSION_STATUSES = ("geplant", "laeuft", "pausiert", "fertig", "fehler", "abgebrochen")
@@ -361,6 +362,91 @@ def add_parsers(add: Callable[..., argparse.ArgumentParser], germanize: Callable
                    help="material <name> | vergleich <a,b,c> | liste | <rechner> schluessel=wert …")
     p.add_argument("parameter", nargs="*", help="z. B. zellen=4 mah=1500 strom_a=20")
 
+    # ---- Phase 3
+    p = add("system", "System & Performance: CPU, RAM, Platte, GPU/VRAM, geladene Modelle, Empfehlungen.")
+    p.add_argument("--json", action="store_true", help="Rohdaten als JSON ausgeben")
+
+    p = add("geraete", "Geräte & Sensoren: angeschlossene USB-/serielle Geräte erkennen, Telemetrie lesen.")
+    ge = nested(p, "aktion")
+    sp = ge("scan", "Geräte erkennen und im Verlauf speichern")
+    sp.add_argument("--json", action="store_true")
+    sp = ge("list", "Geräteverlauf anzeigen")
+    sp.add_argument("--verbunden", action="store_true", help="nur aktuell verbundene")
+    sp = ge("lesen", "serielle Rohdaten lesen und Telemetrie (NMEA, Key=Value, JSON) auswerten")
+    sp.add_argument("port")
+    sp.add_argument("--baud", default=None, type=int)
+    sp.add_argument("--sekunden", default=2.0, type=float)
+    sp = ge("notiz", "Notiz zu einem Gerät speichern")
+    sp.add_argument("key")
+    sp.add_argument("text", nargs="*")
+    sp = ge("vergessen", "Gerät aus dem Verlauf löschen")
+    sp.add_argument("key")
+
+    p = add("modell3d", "3D-Modellierung: parametrische Bauteile erzeugen, importieren, prüfen, exportieren.")
+    m3 = nested(p, "aktion")
+    m3("arten", "verfügbare Primitive und Parameter anzeigen")
+    sp = m3("neu", "Modell aus Primitiv erzeugen (Parameter als name=wert)")
+    sp.add_argument("art")
+    sp.add_argument("parameter", nargs="*", help="z. B. l=100 b=50 h=10  (lochplatte: holes=x/y/d;x/y/d)")
+    sp.add_argument("--name", default=None)
+    sp.add_argument("--projekt", default=None)
+    sp.add_argument("--material", default=None)
+    sp = m3("import", "STL/OBJ-Datei in den Modellspeicher übernehmen")
+    sp.add_argument("pfad")
+    sp.add_argument("--name", default=None)
+    sp.add_argument("--projekt", default=None)
+    sp = m3("list", "gespeicherte Modelle anzeigen")
+    sp.add_argument("--projekt", default=None)
+    sp = m3("info", "Statistik eines Modells (Volumen, Masse, Schwerpunkt, Wasserdichtigkeit)")
+    sp.add_argument("id", type=int)
+    sp.add_argument("--material", default=None)
+    sp = m3("export", "Modell als STL (binär/ascii) oder OBJ schreiben")
+    sp.add_argument("id", type=int)
+    sp.add_argument("ziel")
+    sp.add_argument("--ascii", action="store_true")
+    sp = m3("loeschen", "Modellversion löschen")
+    sp.add_argument("id", type=int)
+
+    p = add("simulation", "Simulation: Flugzeit, Steigflug, Fall, Thermik, Regler, Akku, Balkenstudie.")
+    p.add_argument("art", nargs="?", default=None, help="Simulationsart (ohne Angabe: Liste)")
+    p.add_argument("parameter", nargs="*", help="name=wert … (Listen mit Semikolon)")
+    p.add_argument("--json", action="store_true", help="vollständiges Ergebnis mit Reihen als JSON")
+    p.add_argument("--csv", default=None, metavar="PFAD", help="Verlauf als CSV schreiben")
+
+    p = add("geo", "Welt & Karten: Entfernung, Flugplan, Sonnenstand, UTM, Orte/Routen, Wetter (online).")
+    g = nested(p, "aktion")
+    sp = g("distanz", "Entfernung und Kurs zwischen zwei Punkten (Koordinaten oder Ortsnamen)")
+    sp.add_argument("von")
+    sp.add_argument("nach")
+    sp = g("plan", "Flugplan über Wegpunkte")
+    sp.add_argument("punkte", help="»lat,lon; lat,lon; …« oder Ortsnamen")
+    sp.add_argument("--geschwindigkeit", default=10.0, type=float, metavar="M_S")
+    sp.add_argument("--wind", default=0.0, type=float, metavar="KMH")
+    sp.add_argument("--wind-aus", default=0.0, type=float, metavar="GRAD")
+    sp = g("sonne", "Sonnenaufgang/-untergang und Sonnenstand")
+    sp.add_argument("ort")
+    sp.add_argument("--zeit", default=None, help="ISO-Datum/-Zeit (Standard: jetzt)")
+    sp = g("utm", "UTM-Koordinaten eines Punkts")
+    sp.add_argument("ort")
+    sp = g("ort", "Ort speichern")
+    sp.add_argument("name")
+    sp.add_argument("koordinate")
+    sp.add_argument("--projekt", default=None)
+    sp.add_argument("--notiz", default="")
+    sp = g("orte", "gespeicherte Orte anzeigen")
+    sp.add_argument("--projekt", default=None)
+    sp = g("route", "Route speichern")
+    sp.add_argument("name")
+    sp.add_argument("punkte")
+    sp.add_argument("--projekt", default=None)
+    sp = g("routen", "gespeicherte Routen anzeigen")
+    sp.add_argument("--projekt", default=None)
+    sp = g("loeschen", "Ort oder Route löschen")
+    sp.add_argument("art", choices=("ort", "route"))
+    sp.add_argument("id", type=int)
+    sp = g("wetter", "aktuelles Wetter und Flugtauglichkeit (nur mit online=true)")
+    sp.add_argument("ort")
+
 
 # ------------------------------------------------------------- Ausführung
 def _brain(cfg: Config, backend: LLMBackend | None) -> Brain:
@@ -373,6 +459,8 @@ def run(cmd: str, cfg: Config, args: argparse.Namespace, out: TextIO, inp: Calla
     handler = {
         "wissen": cmd_wissen, "projekt": cmd_projekt, "mission": cmd_mission,
         "automation": cmd_automation, "modelle": cmd_modelle, "rechner": cmd_rechner,
+        "system": cmd_system, "geraete": cmd_geraete, "modell3d": cmd_modell3d,
+        "simulation": cmd_simulation, "geo": cmd_geo,
     }[cmd]
     return handler(cfg, args, out, inp, backend)
 
@@ -859,7 +947,319 @@ def cmd_rechner(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend
     return 0
 
 
+# ------------------------------------------------------------- Phase 3
+def cmd_system(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend) -> int:
+    from . import sysmon
+    from .llm import make_backend
+    try:
+        be = backend if backend is not None else make_backend(cfg)
+    except Exception:  # noqa: BLE001 – Systemstatus auch ohne Modell-Backend
+        be = None
+    snap = sysmon.snapshot(backend=be, data_dir=str(cfg.data_path))
+    if args.json:
+        _println(out, json.dumps({"system": snap, "hinweise": sysmon.recommend(snap)}, ensure_ascii=False, indent=2,
+                                 default=str))
+        return 0
+    _println(out, sysmon.format_snapshot(snap))
+    return 0
+
+
+def cmd_geraete(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend) -> int:
+    from . import devices as devmod
+    action = getattr(args, "aktion", None)
+    if action is None:
+        _println(out, "Aufruf: python -m obito geraete {scan,list,lesen,notiz,vergessen} … (--help für Details)")
+        return 2
+    cfg.ensure_dirs()
+    store = devmod.DeviceStore(cfg.devices_db)
+    try:
+        if action == "scan":
+            found = devmod.scan()
+            rows = store.update(found)
+            if args.json:
+                _println(out, json.dumps([d.to_dict() for d in found], ensure_ascii=False, indent=2))
+            else:
+                _println(out, devmod.format_scan(found, rows))
+            return 0
+        if action == "list":
+            rows = store.list(connected_only=bool(args.verbunden))
+            if not rows:
+                _println(out, "Keine Geräte im Verlauf. Erkennen: python -m obito geraete scan")
+                return 0
+            for r in rows:
+                _println(out, "  " + devmod.format_device(r))
+            return 0
+        if action == "lesen":
+            try:
+                result = devmod.read_serial(args.port, baud=cfg.serial_baud if args.baud is None else args.baud,
+                                           seconds=args.sekunden)
+            except ValueError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            parsed = devmod.parse_telemetry(result["text"])
+            _println(out, devmod.format_telemetry(result, parsed))
+            return 0
+        if action == "notiz":
+            if store.get(args.key) is None:
+                _println(out, f"Gerät »{args.key}« unbekannt – python -m obito geraete list zeigt die Schlüssel.")
+                return 1
+            store.note(args.key, " ".join(args.text))
+            _println(out, "Notiz gespeichert.")
+            return 0
+        if action == "vergessen":
+            ok = store.forget(args.key)
+            _println(out, "Gelöscht." if ok else f"Gerät »{args.key}« unbekannt.")
+            return 0 if ok else 1
+        _println(out, f"Unbekannte Aktion {action!r}.")
+        return 2
+    finally:
+        store.close()
+
+
+def _fmt_stats3d(st: dict) -> str:
+    bb = st.get("bounding_box") or {}
+    size = bb.get("groesse") or (0, 0, 0)
+    masse = st.get("masse_g")
+    return (f"Dreiecke {st.get('dreiecke')} · Volumen {engineering.fmt_number(float(st.get('volumen_cm3') or 0), 4)} cm³ · "
+            f"Fläche {engineering.fmt_number(float(st.get('flaeche_cm2') or 0), 4)} cm² · "
+            f"Maße {engineering.fmt_number(float(size[0]), 4)} × {engineering.fmt_number(float(size[1]), 4)} × "
+            f"{engineering.fmt_number(float(size[2]), 4)} mm · wasserdicht {'ja' if st.get('wasserdicht') else 'nein'}"
+            + (f" · Masse {engineering.fmt_number(float(masse), 4)} g" if masse is not None else ""))
+
+
+def fmt_model3d(rec: dict) -> str:
+    proj = f" [{rec['projekt']}]" if rec.get("projekt") else ""
+    return (f"#{rec['id']} {rec['name']} v{rec['version']}{proj} ({rec.get('art') or 'import'}) – "
+            + _fmt_stats3d(rec.get("statistik") or {}))
+
+
+def cmd_modell3d(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend) -> int:
+    from . import geometry
+    action = getattr(args, "aktion", None)
+    if action is None:
+        _println(out, "Aufruf: python -m obito modell3d {arten,neu,import,list,info,export,loeschen} … (--help für Details)")
+        return 2
+    if action == "arten":
+        for key, spec in geometry.PRIMITIVES.items():
+            _println(out, f"{key}: {spec['beschreibung']}")
+            for name, desc, default in spec["parameter"]:
+                d = "" if default is None else f" (Standard {default})"
+                _println(out, f"    {name} – {desc}{d}")
+        return 0
+    cfg.ensure_dirs()
+    store = geometry.ModelStore(cfg.models3d_db, cfg.models3d_dir)
+    try:
+        if action == "neu":
+            try:
+                params = _parse_kv(args.parameter)
+                mesh = geometry.build(args.art, params)
+                rec = store.save(mesh, args.name or args.art, kind=geometry.resolve_kind(args.art), params=params,
+                                 project=args.projekt, material=args.material)
+            except ValueError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, "Erzeugt: " + fmt_model3d(rec))
+            _println(out, f"Datei: {rec['datei']}")
+            return 0
+        if action == "import":
+            try:
+                rec = store.import_file(args.pfad, name=args.name, project=args.projekt)
+            except (ValueError, FileNotFoundError, OSError) as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, "Importiert: " + fmt_model3d(rec))
+            return 0
+        if action == "list":
+            rows = store.list(project=args.projekt)
+            if not rows:
+                _println(out, "Keine Modelle. Erzeugen: python -m obito modell3d neu quader l=100 b=50 h=10")
+                return 0
+            for r in rows:
+                _println(out, "  " + fmt_model3d(r))
+            return 0
+        if action == "info":
+            rec = store.get(args.id)
+            if rec is None:
+                _println(out, f"Modell {args.id} unbekannt.")
+                return 1
+            mesh = store.mesh(args.id)
+            st = mesh.stats(args.material or rec.get("material"))
+            _println(out, fmt_model3d({**rec, "statistik": st}))
+            com = st.get("schwerpunkt") or (0, 0, 0)
+            _println(out, f"  Schwerpunkt: ({engineering.fmt_number(float(com[0]), 4)}; {engineering.fmt_number(float(com[1]), 4)}; "
+                          f"{engineering.fmt_number(float(com[2]), 4)}) mm")
+            if rec.get("parameter"):
+                _println(out, "  Parameter: " + ", ".join(f"{k}={v}" for k, v in rec["parameter"].items()))
+            _println(out, f"  Datei: {rec['datei']}")
+            return 0
+        if action == "export":
+            rec = store.get(args.id)
+            if rec is None:
+                _println(out, f"Modell {args.id} unbekannt.")
+                return 1
+            mesh = store.mesh(args.id)
+            target = Path(args.ziel)
+            try:
+                if target.suffix.lower() == ".obj":
+                    geometry.write_obj(mesh, target)
+                else:
+                    geometry.write_stl(mesh, target, binary=not args.ascii)
+            except OSError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, f"Geschrieben: {target}")
+            return 0
+        if action == "loeschen":
+            ok = store.delete(args.id)
+            _println(out, "Gelöscht." if ok else f"Modell {args.id} unbekannt.")
+            return 0 if ok else 1
+        _println(out, f"Unbekannte Aktion {action!r}.")
+        return 2
+    finally:
+        store.close()
+
+
+def cmd_simulation(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend) -> int:
+    from . import simulation
+    if not args.art or args.art.lower() in ("liste", "arten", "list"):
+        _println(out, "Simulationen (Aufruf: python -m obito simulation <art> name=wert …):")
+        _println(out, simulation.describe())
+        return 0
+    try:
+        params = _parse_kv(args.parameter)
+        result = simulation.run(args.art, params)
+    except ValueError as e:
+        _println(out, f"Fehler: {e}")
+        return 1
+    if args.json:
+        _println(out, json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        _println(out, simulation.summary_text(result))
+    if args.csv:
+        axis = result.get("zeit_s")
+        axis_name = "zeit_s"
+        if axis is None:
+            axis = result.get("x", [])
+            axis_name = result.get("x_name", "x")
+        names = list(result["reihen"].keys())
+        try:
+            with open(args.csv, "w", encoding="utf-8", newline="") as fh:
+                fh.write(";".join([axis_name] + names) + "\n")
+                for i, x in enumerate(axis):
+                    row = [x] + [result["reihen"][n][i] for n in names]
+                    fh.write(";".join(str(v).replace(".", ",") for v in row) + "\n")
+        except OSError as e:
+            _println(out, f"CSV nicht geschrieben: {e}")
+            return 1
+        _println(out, f"CSV geschrieben: {args.csv}")
+    return 0
+
+
+def cmd_geo(cfg: Config, args: argparse.Namespace, out: TextIO, inp, backend) -> int:
+    from . import geo
+    action = getattr(args, "aktion", None)
+    if action is None:
+        _println(out, "Aufruf: python -m obito geo {distanz,plan,sonne,utm,ort,orte,route,routen,loeschen,wetter} … "
+                      "(--help für Details)")
+        return 2
+    cfg.ensure_dirs()
+    store = geo.WaypointStore(cfg.geo_db)
+    from .tools import ToolRegistry
+    reg = ToolRegistry(".")
+    geo.register_tools(reg, store, lambda: bool(cfg.online))
+    try:
+        if action == "distanz":
+            res = reg.run("geo_distanz", {"von": args.von, "nach": args.nach})
+        elif action == "plan":
+            res = reg.run("geo_route", {"punkte": args.punkte, "geschwindigkeit_m_s": args.geschwindigkeit,
+                                        "wind_kmh": args.wind, "wind_aus_deg": args.wind_aus})
+        elif action == "sonne":
+            res = reg.run("sonnenstand", {"ort": args.ort, "datum": args.zeit})
+        elif action == "wetter":
+            res = reg.run("wetter", {"ort": args.ort})
+        elif action == "utm":
+            try:
+                lat, lon = geo.parse_coord(args.ort)
+            except ValueError:
+                place = store.find_place(args.ort)
+                if place is None:
+                    _println(out, f"»{args.ort}« ist weder Koordinate noch gespeicherter Ort.")
+                    return 1
+                lat, lon = place["lat"], place["lon"]
+            try:
+                u = geo.utm(lat, lon)
+            except ValueError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, f"{geo.format_coord(lat, lon)} → UTM {u['text']} (Zone {u['zone']}{u['band']}, "
+                          f"Ostwert {u['ostwert_m']:.2f} m, Nordwert {u['nordwert_m']:.2f} m, {u['hemisphaere']})")
+            return 0
+        elif action == "ort":
+            try:
+                lat, lon = geo.parse_coord(args.koordinate)
+                place = store.add_place(args.name, lat, lon, project=args.projekt, note=args.notiz)
+            except ValueError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, f"Gespeichert: #{place['id']} {place['name']} {place['koordinate']}")
+            return 0
+        elif action == "orte":
+            rows = store.list_places(project=args.projekt)
+            if not rows:
+                _println(out, "Keine Orte gespeichert. Anlegen: python -m obito geo ort <name> \"lat, lon\"")
+                return 0
+            for r in rows:
+                proj = f" [{r['projekt']}]" if r.get("projekt") else ""
+                _println(out, f"  #{r['id']} {r['name']}{proj} {r['koordinate']}" + (f" – {r['notiz']}" if r.get("notiz") else ""))
+            return 0
+        elif action == "route":
+            chunks = [c for c in args.punkte.split(";") if c.strip()]
+            pts = []
+            for c in chunks:
+                try:
+                    pts.append(geo.parse_coord(c))
+                except ValueError:
+                    place = store.find_place(c.strip())
+                    if place is None:
+                        _println(out, f"»{c.strip()}« ist weder Koordinate noch gespeicherter Ort.")
+                        return 1
+                    pts.append((place["lat"], place["lon"]))
+            try:
+                route = store.add_route(args.name, pts, project=args.projekt)
+            except ValueError as e:
+                _println(out, f"Fehler: {e}")
+                return 1
+            _println(out, f"Gespeichert: #{route['id']} {route['name']} – {len(route['punkte'])} Punkte, "
+                          f"{engineering.fmt_number(route['laenge_m'] / 1000.0, 4)} km")
+            return 0
+        elif action == "routen":
+            rows = store.list_routes(project=args.projekt)
+            if not rows:
+                _println(out, "Keine Routen gespeichert.")
+                return 0
+            for r in rows:
+                proj = f" [{r['projekt']}]" if r.get("projekt") else ""
+                _println(out, f"  #{r['id']} {r['name']}{proj} – {len(r['punkte'])} Punkte, "
+                              f"{engineering.fmt_number(r['laenge_m'] / 1000.0, 4)} km")
+            return 0
+        elif action == "loeschen":
+            ok = store.delete_place(args.id) if args.art == "ort" else store.delete_route(args.id)
+            _println(out, "Gelöscht." if ok else f"{args.art.capitalize()} {args.id} unbekannt.")
+            return 0 if ok else 1
+        else:
+            _println(out, f"Unbekannte Aktion {action!r}.")
+            return 2
+        if not res.ok:
+            _println(out, f"Fehler: {res.error}")
+            return 1
+        _println(out, res.output)
+        return 0
+    finally:
+        store.close()
+
+
 __all__ = [
     "COMMANDS", "add_parsers", "run", "fmt_document", "fmt_project", "fmt_note", "fmt_mission", "fmt_automation",
     "fmt_model", "model_vram_estimate", "pull_with_progress", "run_mission_foreground", "persist_model_choice",
+    "fmt_model3d",
 ]

@@ -1133,7 +1133,13 @@ _NEEDS_TOOLS_RE = re.compile(
     # Ingenieur-Rechner, Materialdaten und Dokumente (Phase 2)
     r"|\b(?:material\w*|werkstoff\w*|dichte|festigkeit|e-modul|zugfestigkeit|akku\w*|lipo|flugzeit|schub\w*"
     r"|drehmoment|kabel\w*|awg|umrechn\w*|einheit\w*|spannungsteiler|durchbiegung|querschnitt|propeller"
-    r"|dokument\w*|datenzentrum|handbuch|datenblatt|unterlagen)",
+    r"|dokument\w*|datenzentrum|handbuch|datenblatt|unterlagen)"
+    # Phase 3: Geräte, System, 3D, Simulation, Welt
+    r"|\b(?:gerät\w*|geraet\w*|usb|com\d+|seriell\w*|telemetrie|flugsteuerung|angeschlossen\w*|sensor\w*"
+    r"|vram|grafikkarte|gpu|auslastung|stl|obj-datei|3d-modell\w*|modell\s+erzeug\w*|quader|zylinder|lochplatte"
+    r"|drohnenrahmen|simulation\w*|simulier\w*|schwebeflug|steigflug|fallgeschwindigkeit|pid|regler|erwärm\w*|erwaerm\w*"
+    r"|entfernung|distanz|wie\s+weit|luftlinie|koordinate\w*|breitengrad|längengrad|laengengrad|utm|wegpunkt\w*|flugplan|kurs\s+nach"
+    r"|sonnenaufgang|sonnenuntergang|sonnenstand|wetter\w*|windgeschwindigkeit|flugtauglich\w*)",
     re.IGNORECASE,
 )
 

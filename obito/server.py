@@ -38,6 +38,8 @@ INDEX_PATH = Path(__file__).resolve().parent / "static" / "index.html"
 DEPTHS = ("auto", "schnell", "mittel", "tief")
 _LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1", "[::1]"}
 _MAX_LIST = 500
+TILE_ORIGIN = "https://tile.openstreetmap.org"              # Kartenkacheln (nur bei cfg.online, Lizenz ODbL)
+TILE_URL = TILE_ORIGIN + "/{z}/{x}/{y}.png"
 
 _PLACEHOLDER_HTML = """<!doctype html>
 <html lang="de">
@@ -322,6 +324,32 @@ _ROUTES: tuple[_Route, ...] = (
     ("DELETE", re.compile(r"^/api/automationen/(\d+)$"), "route_automation_delete"),
     ("POST", re.compile(r"^/api/pflege/konsolidieren$"), "route_konsolidieren"),
     ("POST", re.compile(r"^/api/pflege/backup$"), "route_backup"),
+    # ---- Phase 3
+    ("GET", re.compile(r"^/api/system$"), "route_system"),
+    ("GET", re.compile(r"^/api/system/verlauf$"), "route_system_verlauf"),
+    ("GET", re.compile(r"^/api/geraete$"), "route_geraete_get"),
+    ("POST", re.compile(r"^/api/geraete/scan$"), "route_geraete_scan"),
+    ("POST", re.compile(r"^/api/geraete/lesen$"), "route_geraete_lesen"),
+    ("POST", re.compile(r"^/api/geraete/notiz$"), "route_geraete_notiz"),
+    ("DELETE", re.compile(r"^/api/geraete/(.+)$"), "route_geraete_delete"),
+    ("GET", re.compile(r"^/api/modelle3d$"), "route_modelle3d_get"),
+    ("POST", re.compile(r"^/api/modelle3d$"), "route_modelle3d_post"),
+    ("GET", re.compile(r"^/api/modelle3d/arten$"), "route_modelle3d_arten"),
+    ("GET", re.compile(r"^/api/modelle3d/(\d+)$"), "route_modell3d_get"),
+    ("GET", re.compile(r"^/api/modelle3d/(\d+)/mesh$"), "route_modell3d_mesh"),
+    ("GET", re.compile(r"^/api/modelle3d/(\d+)/stl$"), "route_modell3d_stl"),
+    ("DELETE", re.compile(r"^/api/modelle3d/(\d+)$"), "route_modell3d_delete"),
+    ("GET", re.compile(r"^/api/simulation/arten$"), "route_simulation_arten"),
+    ("POST", re.compile(r"^/api/simulation$"), "route_simulation"),
+    ("GET", re.compile(r"^/api/geo/orte$"), "route_geo_orte_get"),
+    ("POST", re.compile(r"^/api/geo/orte$"), "route_geo_orte_post"),
+    ("DELETE", re.compile(r"^/api/geo/orte/(\d+)$"), "route_geo_ort_delete"),
+    ("GET", re.compile(r"^/api/geo/routen$"), "route_geo_routen_get"),
+    ("POST", re.compile(r"^/api/geo/routen$"), "route_geo_routen_post"),
+    ("DELETE", re.compile(r"^/api/geo/routen/(\d+)$"), "route_geo_route_delete"),
+    ("POST", re.compile(r"^/api/geo/plan$"), "route_geo_plan"),
+    ("GET", re.compile(r"^/api/geo/sonne$"), "route_geo_sonne"),
+    ("GET", re.compile(r"^/api/geo/wetter$"), "route_geo_wetter"),
 )
 
 
@@ -610,15 +638,21 @@ class ObitoHandler(BaseHTTPRequestHandler):
         except OSError as e:
             self.server.log(f"index.html nicht lesbar ({path}): {e}")
             body = _PLACEHOLDER_HTML.encode("utf-8")
+        img_src = "img-src 'self' data: blob:"
+        if bool(getattr(getattr(self.server.brain, "cfg", None), "online", False)):
+            img_src += " " + TILE_ORIGIN          # Kartenkacheln nur, wenn Online-Funktionen erlaubt sind
         self._send_bytes(200, body, "text/html; charset=utf-8", {
             "X-Frame-Options": "DENY",
             "Referrer-Policy": "no-referrer",
             "Content-Security-Policy": "default-src 'self' 'unsafe-inline' data: blob:; "
-                                       "connect-src 'self'; frame-ancestors 'none'",
+                                       f"{img_src}; connect-src 'self'; frame-ancestors 'none'",
         })
 
     def route_status(self) -> None:
-        self._send_json(200, {"ok": True, **self.server.brain.status()})
+        payload = {"ok": True, **self.server.brain.status()}
+        if payload.get("online"):
+            payload["kacheln_url"] = TILE_URL
+        self._send_json(200, payload)
 
     def route_frage(self) -> None:
         data = self.body or {}
@@ -1101,6 +1135,360 @@ class ObitoHandler(BaseHTTPRequestHandler):
         keep = self._opt_int(data, "behalten")
         target = self.server.brain.backup(keep=7 if keep is None else int(keep))
         self._send_json(200, {"ok": True, "pfad": str(target)})
+
+    # ------------------------------------------------------ Phase 3: System
+    def route_system(self) -> None:
+        from . import sysmon
+        brain = self.server.brain
+        snap = sysmon.snapshot(backend=brain.backend, data_dir=str(brain.cfg.data_path))
+        sampler = getattr(brain, "sysmon", None)
+        if sampler is not None:
+            sampler.add(snap)
+        self._send_json(200, {"ok": True, "system": snap, "hinweise": sysmon.recommend(snap),
+                              "text": sysmon.format_snapshot(snap)})
+
+    def route_system_verlauf(self) -> None:
+        sampler = getattr(self.server.brain, "sysmon", None)
+        series = sampler.series() if sampler is not None else {"zeit": [], "cpu": [], "ram": [], "gpu": [], "vram": []}
+        self._send_json(200, {"ok": True, "verlauf": series})
+
+    # ------------------------------------------------------ Phase 3: Geräte
+    def _devices(self):
+        store = getattr(self.server.brain, "devices", None)
+        if store is None:
+            raise _HttpError(503, "Geräteerkennung ist in diesem Denkkern nicht verfügbar")
+        return store
+
+    def route_geraete_get(self) -> None:
+        store = self._devices()
+        only = self._query_str("verbunden") in ("1", "true", "ja")
+        self._send_json(200, {"ok": True, "geraete": store.list(connected_only=only), "statistik": store.stats()})
+
+    def route_geraete_scan(self) -> None:
+        from . import devices as devmod
+        store = self._devices()
+        found = devmod.scan()
+        rows = store.update(found)
+        self._send_json(200, {"ok": True, "gefunden": [d.to_dict() for d in found], "geraete": rows,
+                              "text": devmod.format_scan(found, rows)})
+
+    def route_geraete_lesen(self) -> None:
+        from . import devices as devmod
+        data = self.body or {}
+        port = self._opt_str(data, "port", required=True)
+        baud = self._opt_int(data, "baud")
+        sekunden = data.get("sekunden", 2.0)
+        if isinstance(sekunden, bool) or not isinstance(sekunden, (int, float, str)):
+            raise _HttpError(400, "Feld »sekunden« muss eine Zahl sein")
+        try:
+            result = devmod.read_serial(port, baud=self.server.brain.cfg.serial_baud if baud is None else baud,
+                                       seconds=float(sekunden))
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        parsed = devmod.parse_telemetry(result["text"])
+        self._send_json(200, {"ok": True, "lesung": result, "telemetrie": parsed,
+                              "text": devmod.format_telemetry(result, parsed)})
+
+    def route_geraete_notiz(self) -> None:
+        data = self.body or {}
+        key = self._opt_str(data, "key", required=True)
+        text = self._opt_str(data, "notiz", allow_empty=True) or ""
+        store = self._devices()
+        if store.get(key) is None:
+            raise _HttpError(404, f"Gerät »{key}« unbekannt")
+        store.note(key, text)
+        self._send_json(200, {"ok": True, "geraet": store.get(key)})
+
+    def route_geraete_delete(self, key: str) -> None:
+        from urllib.parse import unquote
+        key = unquote(key)
+        if not self._devices().forget(key):
+            raise _HttpError(404, f"Gerät »{key}« unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": key})
+
+    # ------------------------------------------------------ Phase 3: 3D-Modelle
+    def _models3d(self):
+        store = getattr(self.server.brain, "models3d", None)
+        if store is None:
+            raise _HttpError(503, "3D-Modellierung ist in diesem Denkkern nicht verfügbar")
+        return store
+
+    def route_modelle3d_arten(self) -> None:
+        from . import geometry
+        arten = []
+        for key, spec in geometry.PRIMITIVES.items():
+            arten.append({"art": key, "beschreibung": spec["beschreibung"],
+                          "parameter": [{"name": n, "beschreibung": d, "standard": v} for n, d, v in spec["parameter"]]})
+        self._send_json(200, {"ok": True, "arten": arten})
+
+    def route_modelle3d_get(self) -> None:
+        store = self._models3d()
+        name = self._query_str("name")
+        projekt = self._query_str("projekt")
+        if name:
+            rows = store.versions(name, projekt)
+        else:
+            rows = store.list(project=projekt)
+        self._send_json(200, {"ok": True, "modelle": rows, "statistik": store.stats()})
+
+    def route_modelle3d_post(self) -> None:
+        from . import geometry
+        data = self.body or {}
+        store = self._models3d()
+        projekt = self._opt_str(data, "projekt")
+        material = self._opt_str(data, "material")
+        notiz = self._opt_str(data, "notiz", allow_empty=True) or ""
+        pfad = self._opt_str(data, "pfad")
+        name = self._opt_str(data, "name")
+        try:
+            if pfad:
+                try:
+                    resolved = self.server.brain.tools.resolve(pfad)
+                except PermissionError as e:
+                    raise _HttpError(403, str(e)) from None
+                if not Path(resolved).is_file():
+                    raise _HttpError(404, f"Datei nicht gefunden: {pfad}")
+                rec = store.import_file(resolved, name=name, project=projekt)
+            else:
+                art = self._opt_str(data, "art", required=True)
+                params = data.get("parameter", {})
+                if params is None:
+                    params = {}
+                if not isinstance(params, (dict, str)):
+                    raise _HttpError(400, "Feld »parameter« muss ein Objekt oder Text sein")
+                mesh = geometry.build(art, params)
+                rec = store.save(mesh, name or art, kind=geometry.resolve_kind(art), params=geometry.parse_params(params),
+                                 project=projekt, material=material, note=notiz)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "modell": rec})
+
+    def route_modell3d_get(self, mid: str) -> None:
+        rec = self._models3d().get(int(mid))
+        if rec is None:
+            raise _HttpError(404, f"Modell {mid} unbekannt")
+        self._send_json(200, {"ok": True, "modell": rec})
+
+    def route_modell3d_mesh(self, mid: str) -> None:
+        store = self._models3d()
+        rec = store.get(int(mid))
+        if rec is None:
+            raise _HttpError(404, f"Modell {mid} unbekannt")
+        try:
+            mesh = store.mesh(int(mid))
+        except (OSError, ValueError) as e:
+            raise _HttpError(500, f"Modelldatei nicht lesbar: {e}") from None
+        self._send_json(200, {"ok": True, "modell": rec, "mesh": mesh.to_json()})
+
+    def route_modell3d_stl(self, mid: str) -> None:
+        store = self._models3d()
+        rec = store.get(int(mid))
+        if rec is None:
+            raise _HttpError(404, f"Modell {mid} unbekannt")
+        path = Path(rec["datei"])
+        try:
+            body = path.read_bytes()
+        except OSError as e:
+            raise _HttpError(500, f"Modelldatei nicht lesbar: {e}") from None
+        safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"{rec['name']}_v{rec['version']}.stl")
+        self._send_bytes(200, body, "model/stl", {"Content-Disposition": f'attachment; filename="{safe}"'})
+
+    def route_modell3d_delete(self, mid: str) -> None:
+        if not self._models3d().delete(int(mid)):
+            raise _HttpError(404, f"Modell {mid} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(mid)})
+
+    # ------------------------------------------------------ Phase 3: Simulation
+    def route_simulation_arten(self) -> None:
+        from . import simulation
+        arten = []
+        for key, spec in simulation.SIMULATIONS.items():
+            arten.append({"art": key, "beschreibung": spec["beschreibung"],
+                          "parameter": [{"name": n, "beschreibung": d, "standard": v} for n, d, v in spec["parameter"]]})
+        self._send_json(200, {"ok": True, "arten": arten})
+
+    def route_simulation(self) -> None:
+        from . import simulation
+        data = self.body or {}
+        art = self._opt_str(data, "art", required=True)
+        params = data.get("parameter", {})
+        if params is None:
+            params = {}
+        if not isinstance(params, (dict, str)):
+            raise _HttpError(400, "Feld »parameter« muss ein Objekt oder Text sein")
+        try:
+            result = simulation.run(art, params)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "ergebnis": result, "text": simulation.summary_text(result)})
+
+    # ------------------------------------------------------ Phase 3: Welt
+    def _geo(self):
+        store = getattr(self.server.brain, "geo", None)
+        if store is None:
+            raise _HttpError(503, "Welt & Karten sind in diesem Denkkern nicht verfügbar")
+        return store
+
+    def _coord_from(self, data: dict, key_lat: str = "lat", key_lon: str = "lon", key_text: str = "ort"):
+        from . import geo
+        text = self._opt_str(data, key_text)
+        if text:
+            try:
+                return geo.parse_coord(text)
+            except ValueError:
+                place = self._geo().find_place(text)
+                if place is None:
+                    raise _HttpError(400, f"»{text}« ist weder Koordinate noch gespeicherter Ort") from None
+                return place["lat"], place["lon"]
+        lat, lon = data.get(key_lat), data.get(key_lon)
+        if isinstance(lat, bool) or isinstance(lon, bool) or not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+            raise _HttpError(400, f"Felder »{key_lat}«/»{key_lon}« (Zahlen) oder »{key_text}« erforderlich")
+        try:
+            return geo.parse_coord((lat, lon))
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+
+    def _coord_from_query(self):
+        from . import geo
+        text = self._query_str("ort")
+        lat, lon = self._query_str("lat"), self._query_str("lon")
+        try:
+            if text:
+                try:
+                    return geo.parse_coord(text)
+                except ValueError:
+                    place = self._geo().find_place(text)
+                    if place is None:
+                        raise _HttpError(400, f"»{text}« ist weder Koordinate noch gespeicherter Ort") from None
+                    return place["lat"], place["lon"]
+            if lat is None or lon is None:
+                raise _HttpError(400, "Parameter »lat« und »lon« oder »ort« erforderlich")
+            return geo.parse_coord(f"{lat}, {lon}")
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+
+    def route_geo_orte_get(self) -> None:
+        store = self._geo()
+        self._send_json(200, {"ok": True, "orte": store.list_places(project=self._query_str("projekt")),
+                              "statistik": store.stats()})
+
+    def route_geo_orte_post(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True)
+        lat, lon = self._coord_from(data, key_text="koordinate")
+        try:
+            place = self._geo().add_place(name, lat, lon, project=self._opt_str(data, "projekt"),
+                                          note=self._opt_str(data, "notiz", allow_empty=True) or "")
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "ort": place})
+
+    def route_geo_ort_delete(self, pid: str) -> None:
+        if not self._geo().delete_place(int(pid)):
+            raise _HttpError(404, f"Ort {pid} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(pid)})
+
+    def route_geo_routen_get(self) -> None:
+        self._send_json(200, {"ok": True, "routen": self._geo().list_routes(project=self._query_str("projekt"))})
+
+    def _points_from(self, data: dict) -> list:
+        from . import geo
+        raw = data.get("punkte")
+        if isinstance(raw, str):
+            chunks = [c for c in re.split(r"\s*;\s*|\n", raw) if c.strip()]
+        elif isinstance(raw, list):
+            chunks = raw
+        else:
+            raise _HttpError(400, "Feld »punkte« (Liste oder »lat,lon; lat,lon«) fehlt")
+        pts = []
+        store = self._geo()
+        for c in chunks:
+            if isinstance(c, str):
+                try:
+                    pts.append(geo.parse_coord(c))
+                    continue
+                except ValueError:
+                    place = store.find_place(c)
+                    if place is None:
+                        raise _HttpError(400, f"»{c}« ist weder Koordinate noch gespeicherter Ort") from None
+                    pts.append((place["lat"], place["lon"]))
+            elif isinstance(c, (list, tuple)) and len(c) == 2:
+                try:
+                    pts.append(geo.parse_coord(c))
+                except ValueError as e:
+                    raise _HttpError(400, str(e)) from None
+            elif isinstance(c, dict) and "lat" in c and "lon" in c:
+                try:
+                    pts.append(geo.parse_coord((c["lat"], c["lon"])))
+                except (ValueError, TypeError) as e:
+                    raise _HttpError(400, str(e)) from None
+            else:
+                raise _HttpError(400, "Ungültiger Wegpunkt")
+        if len(pts) > geo.MAX_ROUTE_POINTS:
+            raise _HttpError(400, f"Höchstens {geo.MAX_ROUTE_POINTS} Punkte")
+        return pts
+
+    def route_geo_routen_post(self) -> None:
+        data = self.body or {}
+        name = self._opt_str(data, "name", required=True)
+        pts = self._points_from(data)
+        try:
+            route = self._geo().add_route(name, pts, project=self._opt_str(data, "projekt"))
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "route": route})
+
+    def route_geo_route_delete(self, rid: str) -> None:
+        if not self._geo().delete_route(int(rid)):
+            raise _HttpError(404, f"Route {rid} unbekannt")
+        self._send_json(200, {"ok": True, "geloescht": int(rid)})
+
+    def route_geo_plan(self) -> None:
+        from . import geo
+        data = self.body or {}
+        pts = self._points_from(data)
+
+        def num(key: str, default: float) -> float:
+            v = data.get(key, default)
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise _HttpError(400, f"Feld »{key}« muss eine Zahl sein")
+            return float(v)
+
+        try:
+            plan = geo.flight_plan(pts, num("geschwindigkeit_m_s", 10.0), wind_speed_m_s=num("wind_kmh", 0.0) / 3.6,
+                                   wind_from_deg=num("wind_aus_deg", 0.0), hover_s_per_point=num("schwebezeit_s", 0.0))
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(200, {"ok": True, "plan": plan})
+
+    def route_geo_sonne(self) -> None:
+        from datetime import datetime, timezone
+        from . import geo
+        lat, lon = self._coord_from_query()
+        when = None
+        text = self._query_str("zeit")
+        if text:
+            try:
+                when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError:
+                raise _HttpError(400, "Parameter »zeit« muss ISO-8601 sein") from None
+        info = geo.sun(lat, lon, when)
+        info["terminator"] = geo.terminator(when if when is not None else datetime.now(timezone.utc))
+        info["subsolar"] = geo.subsolar_point(when if when is not None else datetime.now(timezone.utc))
+        self._send_json(200, {"ok": True, "sonne": info})
+
+    def route_geo_wetter(self) -> None:
+        from . import geo
+        brain = self.server.brain
+        if not bool(getattr(brain.cfg, "online", False)):
+            raise _HttpError(403, "Online-Funktionen sind ausgeschaltet (Einstellung »online« auf true setzen)")
+        lat, lon = self._coord_from_query()
+        fn = getattr(self.server, "weather_fn", None) or geo.weather
+        try:
+            w = fn(lat, lon)
+        except RuntimeError as e:
+            raise _HttpError(502, str(e)) from None
+        self._send_json(200, {"ok": True, "wetter": w, "text": geo.format_weather(w)})
 
 
 # ----------------------------------------------------------------- Komfort

@@ -24,6 +24,9 @@ dependencies = []
 
 [project.optional-dependencies]
 pdf = ["pypdf>=4"]
+seriell = ["pyserial>=3.5"]          # serielle Telemetrie unter Windows (Linux/macOS geht auch ohne)
+fenster = ["pywebview>=5"]           # eigenes App-Fenster statt Edge/Chrome-App-Modus
+exe = ["pyinstaller>=6"]             # build_exe.bat → dist/OBITO/OBITO.exe
 training = ["torch", "transformers>=4.40", "peft>=0.10", "datasets", "accelerate"]
 training-qlora = ["bitsandbytes"]
 training-dpo = ["trl>=0.9"]

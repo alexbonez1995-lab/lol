@@ -195,6 +195,11 @@ class ChatSession:
         (("automationen",), "cmd_automations", "/automationen", "Automationen zeigen"),
         (("material",), "cmd_material", "/material <name>", "Materialdaten (Richtwerte) zeigen"),
         (("rechner",), "cmd_calculator", "/rechner [name k=v …]", "Ingenieur-Rechner (ohne Argument: Liste)"),
+        (("system",), "cmd_system", "/system", "System & Performance (CPU, RAM, GPU, Modelle)"),
+        (("geraete", "geräte"), "cmd_devices", "/geraete [scan|lesen <port>]", "Geräte & Sensoren: Verlauf, Scan, Telemetrie"),
+        (("modell3d",), "cmd_model3d", "/modell3d [art k=v … | liste | info <id>]", "3D-Modell erzeugen oder anzeigen"),
+        (("simulation",), "cmd_simulation", "/simulation [art k=v …]", "Simulation ausführen (ohne Argument: Arten)"),
+        (("geo",), "cmd_geo", "/geo <distanz|sonne|wetter|orte> …", "Welt & Karten: Entfernung, Sonne, Wetter, Orte"),
         (("backup",), "cmd_backup", "/backup", "Sicherung aller Daten anlegen"),
         (("konsolidieren",), "cmd_consolidate", "/konsolidieren [tage]", "Gedächtnis-Pflege: alte KI-Erinnerungen verdichten"),
         (("beenden", "exit", "quit", "q"), "cmd_quit", "/beenden", "OBITO verlassen"),
@@ -858,6 +863,135 @@ class ChatSession:
             self._print(f"{SYM_FAIL} {e}")
             return True
         res = self.brain.tools.run(name, kv)
+        self._print(res.output if res.ok else f"{SYM_FAIL} {res.error}")
+        return True
+
+    def cmd_system(self, arg: str) -> bool:
+        from . import sysmon
+        snap = sysmon.snapshot(backend=self.brain.backend, data_dir=str(self.cfg.data_path))
+        self.brain.sysmon.add(snap)
+        self._print(sysmon.format_snapshot(snap))
+        return True
+
+    def cmd_devices(self, arg: str) -> bool:
+        from . import devices as devmod
+        tokens = arg.split()
+        if tokens and tokens[0].lower() == "scan":
+            found = devmod.scan()
+            rows = self.brain.devices.update(found)
+            self._print(devmod.format_scan(found, rows))
+            return True
+        if tokens and tokens[0].lower() == "lesen":
+            if len(tokens) < 2:
+                self._print("Aufruf: /geraete lesen <port> [baud] [sekunden]")
+                return True
+            baud = int(tokens[2]) if len(tokens) > 2 and tokens[2].isdigit() else self.cfg.serial_baud
+            try:
+                seconds = float(tokens[3].replace(",", ".")) if len(tokens) > 3 else 2.0
+                result = devmod.read_serial(tokens[1], baud=baud, seconds=seconds)
+            except ValueError as e:
+                self._print(f"{SYM_FAIL} {e}")
+                return True
+            self._print(devmod.format_telemetry(result, devmod.parse_telemetry(result["text"])))
+            return True
+        rows = self.brain.devices.list()
+        if not rows:
+            self._print("Keine Geräte im Verlauf. /geraete scan erkennt angeschlossene Geräte.")
+            return True
+        for r in rows:
+            self._print("  " + devmod.format_device(r))
+        return True
+
+    def cmd_model3d(self, arg: str) -> bool:
+        from . import geometry
+        tokens = arg.split()
+        if not tokens or tokens[0].lower() in ("liste", "list"):
+            rows = self.brain.models3d.list()
+            if not rows:
+                self._print("Keine 3D-Modelle. Erzeugen: /modell3d quader l=100 b=50 h=10 [name=Platte] – Arten: "
+                            + ", ".join(geometry.PRIMITIVES))
+                return True
+            for r in rows:
+                self._print("  " + cli_extra.fmt_model3d(r))
+            return True
+        if tokens[0].lower() == "info":
+            if len(tokens) < 2 or not tokens[1].isdigit():
+                self._print("Aufruf: /modell3d info <id>")
+                return True
+            rec = self.brain.models3d.get(int(tokens[1]))
+            if rec is None:
+                self._print(f"{SYM_FAIL} Modell {tokens[1]} unbekannt.")
+                return True
+            self._print(cli_extra.fmt_model3d(rec))
+            self._print(f"  Datei: {rec['datei']}")
+            return True
+        try:
+            kv = cli_extra._parse_kv(tokens[1:])
+            name = kv.pop("name", None)
+            material = kv.pop("material", None)
+            mesh = geometry.build(tokens[0], kv)
+            rec = self.brain.models3d.save(mesh, name or tokens[0], kind=geometry.resolve_kind(tokens[0]), params=kv,
+                                           project=self.project, material=material)
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        self._print("Erzeugt: " + cli_extra.fmt_model3d(rec))
+        return True
+
+    def cmd_simulation(self, arg: str) -> bool:
+        from . import simulation
+        tokens = arg.split()
+        if not tokens:
+            self._print("Simulationen (Aufruf: /simulation <art> name=wert …):")
+            self._print(simulation.describe())
+            return True
+        try:
+            result = simulation.run(tokens[0], cli_extra._parse_kv(tokens[1:]))
+        except ValueError as e:
+            self._print(f"{SYM_FAIL} {e}")
+            return True
+        self._print(simulation.summary_text(result))
+        return True
+
+    def cmd_geo(self, arg: str) -> bool:
+        tokens = arg.split(None, 1)
+        if not tokens:
+            self._print("Aufruf: /geo distanz <von> ; <nach> | /geo sonne <ort> [datum] | /geo wetter <ort> | "
+                        "/geo orte | /geo route <punkte; …> <m/s>")
+            return True
+        sub = tokens[0].lower()
+        rest = tokens[1].strip() if len(tokens) > 1 else ""
+        if sub == "orte":
+            rows = self.brain.geo.list_places()
+            if not rows:
+                self._print("Keine Orte gespeichert (python -m obito geo ort <name> \"lat, lon\").")
+            for r in rows:
+                self._print(f"  #{r['id']} {r['name']} {r['koordinate']}")
+            return True
+        if sub == "distanz":
+            parts = [p.strip() for p in rest.split(";")]
+            if len(parts) != 2:
+                self._print("Aufruf: /geo distanz <von> ; <nach>")
+                return True
+            res = self.brain.tools.run("geo_distanz", {"von": parts[0], "nach": parts[1]})
+        elif sub == "sonne":
+            parts = rest.rsplit(" ", 1)
+            args = {"ort": rest}
+            if len(parts) == 2 and (parts[1][:1].isdigit()):
+                args = {"ort": parts[0], "datum": parts[1]}
+            res = self.brain.tools.run("sonnenstand", args)
+        elif sub == "wetter":
+            res = self.brain.tools.run("wetter", {"ort": rest})
+        elif sub == "route":
+            parts = rest.rsplit(" ", 1)
+            try:
+                speed = float(parts[1].replace(",", ".")) if len(parts) == 2 else 10.0
+            except ValueError:
+                speed = 10.0
+            res = self.brain.tools.run("geo_route", {"punkte": parts[0] if len(parts) == 2 else rest, "geschwindigkeit_m_s": speed})
+        else:
+            self._print(f"Unbekannt: /geo {sub}")
+            return True
         self._print(res.output if res.ok else f"{SYM_FAIL} {res.error}")
         return True
 

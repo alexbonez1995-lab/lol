@@ -458,6 +458,56 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
 .summary-box { white-space: pre-wrap; font-size: 12.5px; color: var(--text); background: rgba(5, 9, 18, 0.5); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 @media (max-width: 1100px) { .page-grid.two { grid-template-columns: 1fr; } .tabs { position: static; } .view-page .panel { max-height: none; } }
 
+/* ------------------------------------------------------------------ Phase 3: System, Geräte, 3D, Simulation, Welt */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: rgba(5, 9, 18, 0.5); }
+.tile .tile-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tile .tile-value { font-family: var(--mono); font-size: 20px; color: var(--text-strong); margin-top: 2px; }
+.tile .tile-sub { font-size: 11.5px; color: var(--muted); }
+.tile.warn .tile-value { color: var(--warn); } .tile.bad .tile-value { color: var(--bad); } .tile.ok .tile-value { color: var(--ok); }
+.meter { height: 6px; border-radius: 3px; background: rgba(63, 224, 255, 0.12); overflow: hidden; margin-top: 6px; }
+.meter span { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); width: 0; transition: width .4s; }
+.meter.warn span { background: var(--warn); } .meter.bad span { background: var(--bad); }
+.chart { width: 100%; height: 220px; display: block; border: 1px solid var(--line); border-radius: 8px; background: rgba(4, 8, 16, 0.7); }
+.chart.tall { height: 300px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.legend .sw { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.legend label { cursor: pointer; user-select: none; }
+.legend input { margin: 0 4px 0 0; vertical-align: middle; }
+.viewer { width: 100%; height: 420px; display: block; border: 1px solid var(--line-strong); border-radius: 8px; background: radial-gradient(ellipse at center, #0b1a33 0%, #050912 75%); cursor: grab; touch-action: none; }
+.viewer:active { cursor: grabbing; }
+.viewer-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.viewer-tools .spacer { flex: 1; }
+.map { width: 100%; height: 480px; display: block; border: 1px solid var(--line-strong); border-radius: 8px; background: #050912; cursor: grab; touch-action: none; }
+.map.pick { cursor: crosshair; }
+.map-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 12.5px; }
+.map-tools .coord { font-family: var(--mono); color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.warnlist { margin: 6px 0 0; padding-left: 18px; color: var(--warn); font-size: 12.5px; }
+.warnlist li { margin: 2px 0; }
+.hintlist { margin: 6px 0 0; padding-left: 18px; color: var(--text); font-size: 12.5px; }
+.pre { white-space: pre-wrap; font-family: var(--mono); font-size: 11.5px; background: #040810; border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 240px; overflow: auto; margin: 8px 0 0; overflow-wrap: anywhere; }
+.tag.role-flugsteuerung { color: var(--cyan); border-color: rgba(63, 224, 255, 0.4); }
+.tag.role-mikrocontroller { color: #9dbcff; border-color: rgba(79, 140, 255, 0.5); }
+.tag.role-usb_seriell { color: var(--warn); border-color: rgba(255, 200, 87, 0.45); }
+.tag.role-drohne { color: var(--ok); border-color: rgba(56, 232, 160, 0.4); }
+.tag.role-sensor { color: #c3b2ff; border-color: rgba(155, 123, 255, 0.5); }
+.tag.status-verbunden { color: var(--ok); border-color: rgba(56, 232, 160, 0.4); }
+.tag.status-getrennt { color: var(--muted); }
+.tag.status-fehler { color: var(--bad); border-color: rgba(255, 94, 122, 0.5); }
+.page-grid.wide-left { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+.params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.params .field.wide { grid-column: 1 / -1; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.inline-form .field { flex: 1 1 120px; }
+.inline-form .field.narrow { flex: 0 1 90px; }
+.table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+.table th, .table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.table th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.table td.num { font-family: var(--mono); text-align: right; }
+.table tr.bad td { color: var(--bad); }
+@media (max-width: 1100px) { .page-grid.wide-left { grid-template-columns: 1fr; } .viewer { height: 320px; } .map { height: 360px; } .params { grid-template-columns: 1fr; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -489,6 +539,11 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
   <button type="button" class="tab" data-view="missionen" aria-selected="false">Missionen <span class="tab-badge" id="tab-missionen-badge" hidden></span></button>
   <button type="button" class="tab" data-view="automationen" aria-selected="false">Automationen</button>
   <button type="button" class="tab" data-view="modelle" aria-selected="false">Modelle</button>
+  <button type="button" class="tab" data-view="system" aria-selected="false">System</button>
+  <button type="button" class="tab" data-view="geraete" aria-selected="false">Geräte</button>
+  <button type="button" class="tab" data-view="3d" aria-selected="false">3D-Modellierung</button>
+  <button type="button" class="tab" data-view="simulation" aria-selected="false">Simulation</button>
+  <button type="button" class="tab" data-view="welt" aria-selected="false">Weltkarte</button>
 </nav>
 
 <main class="hud-main view" id="view-uebersicht">
@@ -804,6 +859,189 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
         <div class="progress" id="mo-progress" hidden><div class="progress-bar"><span id="mo-progress-bar"></span></div><span class="mono" id="mo-progress-text"></span></div>
         <div class="section-title">Empfehlungen</div>
         <dl class="kv"><dt>8 GB</dt><dd>qwen2.5:7b · num_ctx 8192 · Routing-Modell leer</dd><dt>12 GB</dt><dd>qwen2.5:7b + qwen2.5:3b · num_ctx 12288</dd><dt>16 GB</dt><dd>qwen2.5:14b + qwen2.5:3b · num_ctx 16384</dd><dt>CPU / &lt;8 GB</dt><dd>qwen2.5:3b · Tiefe schnell</dd></dl>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Phase 3: System -->
+<section class="view view-page" id="view-system" hidden aria-labelledby="sy-title">
+  <div class="page-grid wide-left">
+    <section class="panel">
+      <div class="panel-head"><h2 id="sy-title">System &amp; Performance</h2><div class="panel-tools"><label class="hint" for="sy-live" style="margin:0 8px 0 0"><input type="checkbox" id="sy-live" checked> live (5 s)</label><button type="button" class="btn ghost small" id="btn-sy-refresh" title="Neu messen">↻</button></div></div>
+      <div class="panel-body">
+        <div class="tiles" id="sy-tiles"></div>
+        <canvas class="chart" id="sy-chart" aria-label="Verlauf CPU, RAM, GPU, VRAM" role="img"></canvas>
+        <div class="legend" id="sy-legend"></div>
+        <div class="section-title">Geladene Modelle</div>
+        <ul class="list" id="sy-models" aria-label="Geladene Modelle"></ul>
+        <p class="muted-note" id="sy-models-empty" hidden>Kein Modell im Speicher (wird beim ersten Aufruf geladen).</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Details &amp; Empfehlungen</h2></div>
+      <div class="panel-body">
+        <dl class="kv" id="sy-kv"></dl>
+        <div class="section-title">Hinweise</div>
+        <ul class="hintlist" id="sy-hints"></ul>
+        <details class="raw"><summary>Messwerte als JSON</summary><pre id="sy-raw"></pre></details>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Phase 3: Geräte -->
+<section class="view view-page" id="view-geraete" hidden aria-labelledby="ge-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="ge-title">Geräte &amp; Sensoren</h2><div class="panel-tools"><button type="button" class="btn primary small" id="btn-ge-scan">Geräte erkennen</button><button type="button" class="btn ghost small" id="btn-ge-refresh" title="Verlauf neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <p class="hint">Erkennt echte USB- und serielle Geräte (Flugsteuerungen, Mikrocontroller, GNSS-Empfänger, USB-Seriell-Wandler). Ohne angeschlossene Hardware bleibt die Liste leer – es werden keine Geräte erfunden.</p>
+        <label class="hint" for="ge-verbunden"><input type="checkbox" id="ge-verbunden"> nur verbundene</label>
+        <ul class="list" id="ge-list" aria-label="Geräte"></ul>
+        <p class="muted-note" id="ge-empty" hidden>Keine Geräte im Verlauf.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Telemetrie lesen</h2></div>
+      <div class="panel-body">
+        <form class="form-grid" id="ge-read-form">
+          <div class="field"><label for="ge-port">Port</label><input class="input mono" id="ge-port" list="ge-ports" placeholder="COM3 oder /dev/ttyUSB0" required><datalist id="ge-ports"></datalist></div>
+          <div class="field"><label for="ge-baud">Baudrate</label><select class="select" id="ge-baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option><option>921600</option></select></div>
+          <div class="field"><label for="ge-sek">Sekunden</label><input class="input" id="ge-sek" type="number" min="0.1" max="30" step="0.1" value="2"></div>
+          <div class="form-actions wide"><span class="form-msg" id="ge-read-msg"></span><button type="submit" class="btn primary small" id="btn-ge-read">Lesen</button></div>
+        </form>
+        <div class="section-title">Erkannte Werte</div>
+        <dl class="kv" id="ge-telemetry"></dl>
+        <p class="muted-note" id="ge-telemetry-empty">Noch nichts gelesen. NMEA (GPS), Key=Value- und JSON-Zeilen werden automatisch erkannt.</p>
+        <details class="raw"><summary>Rohdaten</summary><pre id="ge-raw"></pre></details>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Phase 3: 3D-Modellierung -->
+<section class="view view-page" id="view-3d" hidden aria-labelledby="m3-title">
+  <div class="page-grid wide-left">
+    <section class="panel">
+      <div class="panel-head"><h2 id="m3-title">3D-Modellierung</h2><div class="panel-tools"><span class="mono" id="m3-current" style="font-size:12px;color:var(--muted)"></span></div></div>
+      <div class="panel-body">
+        <canvas class="viewer" id="m3-viewer" aria-label="3D-Vorschau" role="img"></canvas>
+        <div class="viewer-tools">
+          <button type="button" class="btn ghost small" id="btn-m3-reset">Ansicht zurücksetzen</button>
+          <label class="hint" for="m3-edges" style="margin:0"><input type="checkbox" id="m3-edges" checked> Kanten</label>
+          <label class="hint" for="m3-spin" style="margin:0"><input type="checkbox" id="m3-spin"> drehen</label>
+          <span class="spacer"></span>
+          <a class="btn ghost small" id="btn-m3-stl" href="#" hidden download>STL herunterladen</a>
+          <button type="button" class="btn danger small" id="btn-m3-delete" hidden>Version löschen</button>
+        </div>
+        <p class="hint">Ziehen = drehen · Mausrad = zoomen · Shift+Ziehen = verschieben</p>
+        <div class="section-title">Statistik</div>
+        <dl class="kv" id="m3-stats"></dl>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Bauteil erzeugen</h2><div class="panel-tools"><button type="button" class="btn ghost small" id="btn-m3-refresh" title="Liste neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <form id="m3-form">
+          <div class="params">
+            <div class="field wide"><label for="m3-art">Primitiv</label><select class="select" id="m3-art"></select><p class="hint" id="m3-art-desc"></p></div>
+            <div id="m3-params" class="params wide" style="grid-column:1 / -1;margin:0"></div>
+            <div class="field"><label for="m3-name">Name</label><input class="input" id="m3-name" placeholder="z. B. Motorplatte"></div>
+            <div class="field"><label for="m3-projekt">Projekt</label><input class="input" id="m3-projekt" placeholder="optional"></div>
+            <div class="field wide"><label for="m3-material">Material (für Masse)</label><input class="input" id="m3-material" placeholder="z. B. CFK, Alu 7075, PETG"></div>
+          </div>
+          <div class="form-actions"><span class="form-msg" id="m3-msg"></span><button type="submit" class="btn primary small" id="btn-m3-create">Erzeugen</button></div>
+        </form>
+        <div class="section-title">Modelle</div>
+        <ul class="list" id="m3-list" aria-label="3D-Modelle"></ul>
+        <p class="muted-note" id="m3-empty" hidden>Noch keine Modelle. STL/OBJ aus dem Arbeitsbereich: <code class="mono">python -m obito modell3d import datei.stl</code></p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Phase 3: Simulation -->
+<section class="view view-page" id="view-simulation" hidden aria-labelledby="si-title">
+  <div class="page-grid two">
+    <section class="panel">
+      <div class="panel-head"><h2 id="si-title">Simulation</h2></div>
+      <div class="panel-body">
+        <form id="si-form">
+          <div class="params">
+            <div class="field wide"><label for="si-art">Art</label><select class="select" id="si-art"></select><p class="hint" id="si-art-desc"></p></div>
+            <div id="si-params" class="params wide" style="grid-column:1 / -1;margin:0"></div>
+          </div>
+          <div class="form-actions"><span class="form-msg" id="si-msg"></span><button type="submit" class="btn primary small" id="btn-si-run">Starten</button></div>
+        </form>
+        <div class="section-title">Ergebnis</div>
+        <dl class="kv" id="si-summary"></dl>
+        <ul class="warnlist" id="si-warnings"></ul>
+        <details class="raw"><summary>Annahmen und Text</summary><pre id="si-text"></pre></details>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Verlauf</h2><div class="panel-tools"><button type="button" class="btn ghost small" id="btn-si-csv" hidden>CSV</button></div></div>
+      <div class="panel-body">
+        <canvas class="chart tall" id="si-chart" aria-label="Simulationsverlauf" role="img"></canvas>
+        <div class="legend" id="si-legend"></div>
+        <p class="muted-note" id="si-empty">Noch keine Simulation gestartet.</p>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ============================================================ Phase 3: Weltkarte -->
+<section class="view view-page" id="view-welt" hidden aria-labelledby="we-title">
+  <div class="page-grid wide-left">
+    <section class="panel">
+      <div class="panel-head"><h2 id="we-title">Weltkarte</h2><div class="panel-tools"><span class="mono" id="we-clock" style="font-size:12px;color:var(--muted)"></span></div></div>
+      <div class="panel-body">
+        <canvas class="map" id="we-map" aria-label="Karte mit Orten, Routen und Tag-Nacht-Grenze" role="img"></canvas>
+        <div class="map-tools">
+          <button type="button" class="btn ghost small" id="btn-we-zoom-in" title="Vergrößern">+</button>
+          <button type="button" class="btn ghost small" id="btn-we-zoom-out" title="Verkleinern">−</button>
+          <button type="button" class="btn ghost small" id="btn-we-world">Welt</button>
+          <label class="hint" for="we-pick" style="margin:0"><input type="checkbox" id="we-pick"> Klick setzt Wegpunkt</label>
+          <label class="hint" for="we-tiles" style="margin:0"><input type="checkbox" id="we-tiles" disabled> Kartenkacheln (nur online)</label>
+          <span class="spacer" style="flex:1"></span>
+          <span class="coord" id="we-cursor">–</span>
+        </div>
+        <p class="hint" id="we-tiles-note">Offline: Gradnetz, Tag-Nacht-Grenze (berechnet), gespeicherte Orte und Routen. Kartenkacheln von OpenStreetMap lassen sich mit der Einstellung <code class="mono">online=true</code> zuschalten.</p>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Orte, Routen, Flugplan</h2><div class="panel-tools"><button type="button" class="btn ghost small" id="btn-we-refresh" title="Neu laden">↻</button></div></div>
+      <div class="panel-body">
+        <form class="inline-form" id="we-place-form">
+          <div class="field"><label for="we-place-name">Ort</label><input class="input" id="we-place-name" placeholder="Name" required></div>
+          <div class="field"><label for="we-place-coord">Koordinate</label><input class="input mono" id="we-place-coord" placeholder="52.52, 13.405" required></div>
+          <button type="submit" class="btn primary small">Speichern</button>
+        </form>
+        <ul class="list" id="we-places" aria-label="Orte" style="max-height:160px"></ul>
+        <div class="section-title">Flugplan</div>
+        <form id="we-plan-form">
+          <div class="field"><label for="we-plan-points">Wegpunkte (Koordinaten oder Ortsnamen, mit ; getrennt)</label><textarea class="textarea mono" id="we-plan-points" rows="2" placeholder="Berlin; 52.53, 13.41"></textarea></div>
+          <div class="inline-form" style="margin-top:6px">
+            <div class="field narrow"><label for="we-plan-speed">m/s</label><input class="input" id="we-plan-speed" type="number" step="0.1" min="0.1" value="12"></div>
+            <div class="field narrow"><label for="we-plan-wind">Wind km/h</label><input class="input" id="we-plan-wind" type="number" step="1" min="0" value="0"></div>
+            <div class="field narrow"><label for="we-plan-wind-from">aus °</label><input class="input" id="we-plan-wind-from" type="number" step="1" min="0" max="360" value="0"></div>
+            <div class="field narrow"><label for="we-plan-name">als Route</label><input class="input" id="we-plan-name" placeholder="Name (optional)"></div>
+            <button type="submit" class="btn primary small">Planen</button>
+          </div>
+        </form>
+        <div id="we-plan-result"></div>
+        <div class="section-title">Routen</div>
+        <ul class="list" id="we-routes" aria-label="Routen" style="max-height:140px"></ul>
+        <div class="section-title">Sonne &amp; Wetter</div>
+        <form class="inline-form" id="we-sun-form">
+          <div class="field"><label for="we-sun-place">Ort</label><input class="input" id="we-sun-place" placeholder="Ort oder Koordinate" required></div>
+          <div class="field narrow"><label for="we-sun-date">Datum</label><input class="input" id="we-sun-date" type="date"></div>
+          <button type="submit" class="btn ghost small">Sonne</button>
+          <button type="button" class="btn ghost small" id="btn-we-weather">Wetter</button>
+        </form>
+        <dl class="kv" id="we-sun"></dl>
+        <p class="form-msg" id="we-msg"></p>
       </div>
     </section>
   </div>
@@ -2460,6 +2698,609 @@ details.raw pre { margin: 6px 0 0; padding: 8px; background: #040810; border: 1p
     api('GET', '/api/missionen').then(d => { const b = $('#tab-missionen-badge'); const n = (d.laufend || []).length; b.hidden = !n; b.textContent = String(n); }).catch(() => {});
   }
 
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+<script>
+/* ================================================================ Phase 3: System, Geräte, 3D, Simulation, Weltkarte */
+(function () {
+  'use strict';
+  const O = window.OBITO;
+  const { el, api, toast, fmtDate, fmtBytes, fmtNum, store, $, $$ } = O;
+  const COLORS = ['#3fe0ff', '#38e8a0', '#ffc857', '#9b7bff', '#ff5e7a', '#4f8cff', '#dbe7f3'];
+  const errText = (e) => (e && e.message) ? e.message : String(e);
+  const P3 = { view: null, sysTimer: null, sim: null, model: null, mesh: null, kacheln: null };
+
+  /* Tab-Anbindung: die Phase-2-Logik blendet alle .view-Elemente aus; hier nur Nachladen + Timer */
+  const loaders = { system: loadSystem, geraete: loadDevices, '3d': loadModels3d, simulation: loadSimulations, welt: loadWorld };
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('.tab');
+    if (!tab) return;
+    const name = tab.dataset.view;
+    P3.view = name;
+    if (name !== 'system') stopSysTimer();
+    if (loaders[name]) loaders[name]();
+  });
+  function kvRows(box, rows) {
+    box.replaceChildren();
+    for (const [k, v, cls] of rows) {
+      box.appendChild(el('dt', { text: k }));
+      const dd = el('dd', { class: cls || '' });
+      if (v instanceof Node) dd.appendChild(v); else dd.textContent = (v === null || v === undefined || v === '') ? '–' : String(v);
+      box.appendChild(dd);
+    }
+  }
+  function de(n, digits) { return (n === null || n === undefined || isNaN(Number(n))) ? '–' : fmtNum(n, digits === undefined ? 2 : digits); }
+  function canvasSize(c) {
+    const r = c.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(10, Math.round(r.width)), h = Math.max(10, Math.round(r.height));
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  /* ---------------------------------------------------------------- Liniendiagramm */
+  function niceStep(range, target) {
+    const raw = range / Math.max(1, target);
+    const mag = Math.pow(10, Math.floor(Math.log10(raw || 1)));
+    for (const m of [1, 2, 5, 10]) { if (raw <= m * mag) return m * mag; }
+    return 10 * mag;
+  }
+  function drawChart(canvas, x, series, opts) {
+    const { ctx, w, h } = canvasSize(canvas);
+    opts = opts || {};
+    ctx.clearRect(0, 0, w, h);
+    const padL = 48, padR = 12, padT = 12, padB = 26;
+    const pw = w - padL - padR, ph = h - padT - padB;
+    const active = series.filter(s => !s.hidden && s.values.some(v => v !== null && v !== undefined));
+    if (!x.length || !active.length) {
+      ctx.fillStyle = '#8ea6bf'; ctx.font = '12px system-ui'; ctx.fillText(opts.empty || 'keine Daten', padL, h / 2);
+      return;
+    }
+    let xmin = Math.min(...x), xmax = Math.max(...x);
+    if (xmax === xmin) xmax = xmin + 1;
+    let ymin = opts.ymin, ymax = opts.ymax;
+    if (ymin === undefined || ymax === undefined) {
+      const all = []; for (const s of active) for (const v of s.values) if (v !== null && v !== undefined && isFinite(v)) all.push(v);
+      let lo = Math.min(...all), hi = Math.max(...all);
+      if (lo === hi) { lo -= 1; hi += 1; }
+      const padY = (hi - lo) * 0.08;
+      if (ymin === undefined) ymin = (lo >= 0 && lo - padY < 0) ? 0 : lo - padY;
+      if (ymax === undefined) ymax = hi + padY;
+    }
+    const sx = v => padL + (v - xmin) / (xmax - xmin) * pw;
+    const sy = v => padT + ph - (v - ymin) / (ymax - ymin) * ph;
+    ctx.strokeStyle = 'rgba(39, 80, 122, 0.6)'; ctx.lineWidth = 1; ctx.fillStyle = '#8ea6bf'; ctx.font = '11px ui-monospace, monospace';
+    const ystep = niceStep(ymax - ymin, 5);
+    for (let v = Math.ceil(ymin / ystep) * ystep; v <= ymax + 1e-9; v += ystep) {
+      const yy = sy(v); ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.fillText(String(+v.toFixed(3)).replace('.', ','), padL - 6, yy + 4);
+    }
+    const xstep = niceStep(xmax - xmin, 6);
+    ctx.textAlign = 'center';
+    for (let v = Math.ceil(xmin / xstep) * xstep; v <= xmax + 1e-9; v += xstep) {
+      const xx = sx(v); ctx.beginPath(); ctx.moveTo(xx, padT); ctx.lineTo(xx, padT + ph); ctx.stroke();
+      ctx.fillText(String(+v.toFixed(3)).replace('.', ','), xx, h - 8);
+    }
+    if (opts.xlabel) { ctx.textAlign = 'right'; ctx.fillText(opts.xlabel, w - padR, h - 8); }
+    ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
+    active.forEach((s) => {
+      ctx.strokeStyle = s.color; ctx.beginPath(); let started = false;
+      for (let i = 0; i < x.length; i++) {
+        const v = s.values[i];
+        if (v === null || v === undefined || !isFinite(v)) { started = false; continue; }
+        const xx = sx(x[i]), yy = sy(v);
+        if (!started) { ctx.moveTo(xx, yy); started = true; } else ctx.lineTo(xx, yy);
+      }
+      ctx.stroke();
+    });
+  }
+  function renderLegend(box, series, onToggle) {
+    box.replaceChildren();
+    series.forEach((s) => {
+      const cb = el('input', { type: 'checkbox' }); cb.checked = !s.hidden;
+      cb.addEventListener('change', () => { s.hidden = !cb.checked; onToggle(); });
+      box.appendChild(el('label', {}, [cb, el('span', { class: 'sw', style: 'background:' + s.color }), s.label]));
+    });
+  }
+
+  /* ---------------------------------------------------------------- System */
+  const sysSeries = [
+    { key: 'cpu', label: 'CPU %', color: COLORS[0], values: [] }, { key: 'ram', label: 'RAM %', color: COLORS[1], values: [] },
+    { key: 'gpu', label: 'GPU %', color: COLORS[2], values: [] }, { key: 'vram', label: 'VRAM %', color: COLORS[3], values: [] },
+  ];
+  let sysX = [];
+  function stopSysTimer() { if (P3.sysTimer) { clearInterval(P3.sysTimer); P3.sysTimer = null; } }
+  function startSysTimer() { stopSysTimer(); if ($('#sy-live').checked) P3.sysTimer = setInterval(() => { if (P3.view === 'system' && !document.hidden) loadSystem(true); }, 5000); }
+  function tile(label, value, sub, pct, cls) {
+    const t = el('div', { class: 'tile ' + (cls || '') }, [el('div', { class: 'tile-label', text: label }), el('div', { class: 'tile-value', text: value }), el('div', { class: 'tile-sub', text: sub || '' })]);
+    if (pct !== null && pct !== undefined && !isNaN(pct)) { const m = el('div', { class: 'meter ' + (pct > 90 ? 'bad' : pct > 75 ? 'warn' : '') }); m.appendChild(el('span', { style: 'width:' + Math.max(0, Math.min(100, pct)) + '%' })); t.appendChild(m); }
+    return t;
+  }
+  async function loadSystem(quiet) {
+    try {
+      const data = await api('GET', '/api/system');
+      const s = data.system, cpu = s.cpu || {}, ram = s.ram || {}, disk = s.platte || {}, gpus = s.gpu || [], proc = s.prozess || {};
+      const tiles = $('#sy-tiles'); tiles.replaceChildren();
+      tiles.appendChild(tile('CPU', cpu.last_prozent === null || cpu.last_prozent === undefined ? '–' : de(cpu.last_prozent, 0) + ' %', (cpu.logisch || '?') + ' Threads', cpu.last_prozent));
+      const ramPct = ram.belegt_prozent;
+      tiles.appendChild(tile('RAM', ramPct === null || ramPct === undefined ? '–' : de(ramPct, 0) + ' %', fmtBytes(ram.frei_bytes) + ' frei von ' + fmtBytes(ram.gesamt_bytes), ramPct));
+      if (gpus.length) {
+        const g = gpus[0]; const vpct = (g.vram_gesamt_mb && g.vram_belegt_mb !== null) ? g.vram_belegt_mb / g.vram_gesamt_mb * 100 : null;
+        tiles.appendChild(tile('GPU', g.auslastung_prozent === null ? '–' : de(g.auslastung_prozent, 0) + ' %', g.name + (g.temperatur_c !== null ? ' · ' + de(g.temperatur_c, 0) + ' °C' : ''), g.auslastung_prozent, g.temperatur_c > 85 ? 'bad' : ''));
+        tiles.appendChild(tile('VRAM', vpct === null ? '–' : de(vpct, 0) + ' %', (g.vram_belegt_mb || 0) + ' / ' + (g.vram_gesamt_mb || '?') + ' MB', vpct));
+      } else tiles.appendChild(tile('GPU', 'keine', 'nvidia-smi nicht verfügbar', null, 'warn'));
+      tiles.appendChild(tile('Platte', disk.belegt_prozent === null || disk.belegt_prozent === undefined ? '–' : de(disk.belegt_prozent, 0) + ' %', fmtBytes(disk.frei_bytes) + ' frei', disk.belegt_prozent));
+      tiles.appendChild(tile('OBITO', fmtBytes(proc.rss_bytes), (proc.threads || '?') + ' Threads', null));
+      // Verlauf
+      const v = await api('GET', '/api/system/verlauf');
+      sysX = (v.verlauf.zeit || []).map((t, i, arr) => Math.round(t - arr[0]));
+      for (const ser of sysSeries) ser.values = v.verlauf[ser.key] || [];
+      drawChart($('#sy-chart'), sysX.length > 1 ? sysX : sysX.concat([60]), sysSeries.map(s => sysX.length > 1 ? s : Object.assign({}, s, { values: s.values.concat([null]) })), { ymin: 0, ymax: 100, xlabel: 's', empty: 'Verlauf wird aufgezeichnet …' });
+      renderLegend($('#sy-legend'), sysSeries, () => drawChart($('#sy-chart'), sysX, sysSeries, { ymin: 0, ymax: 100, xlabel: 's' }));
+      // Modelle
+      const ml = $('#sy-models'); ml.replaceChildren();
+      const models = s.modelle_geladen || [];
+      $('#sy-models-empty').hidden = models.length > 0;
+      for (const m of models) ml.appendChild(el('li', { class: 'item' }, el('div', { class: 'item-top' }, [el('strong', { class: 'mono', text: m.name }), el('span', { class: 'tag', text: fmtBytes(m.groesse) }), m.vram ? el('span', { class: 'tag', text: fmtBytes(m.vram) + ' VRAM' }) : null])));
+      // Details
+      const pl = s.plattform || {};
+      kvRows($('#sy-kv'), [
+        ['System', (pl.system || '?') + ' ' + (pl.release || '')], ['Python', pl.python], ['Prozessor', cpu.name],
+        ['Kerne', cpu.kerne !== null && cpu.kerne !== undefined ? cpu.kerne + ' physisch / ' + (cpu.logisch || '?') + ' logisch' : cpu.logisch],
+        ['RAM gesamt', fmtBytes(ram.gesamt_bytes)], ['Platte', (disk.pfad || '') + ' · ' + fmtBytes(disk.gesamt_bytes)],
+        ['GPU', gpus.length ? gpus.map(g => g.name + ' (' + (g.vram_gesamt_mb || '?') + ' MB)').join(', ') : 'keine NVIDIA-GPU erkannt'],
+        ['Datenverzeichnis', s.datenverzeichnis_bytes !== null && s.datenverzeichnis_bytes !== undefined ? fmtBytes(s.datenverzeichnis_bytes) : '–'],
+        ['Laufzeit', proc.laufzeit_s !== undefined ? O.fmtDur(proc.laufzeit_s) : '–'], ['Gemessen', fmtDate(s.zeit)],
+      ]);
+      const hints = $('#sy-hints'); hints.replaceChildren();
+      for (const h of data.hinweise || []) hints.appendChild(el('li', { text: h }));
+      $('#sy-raw').textContent = JSON.stringify(s, null, 2);
+      if (!P3.sysTimer) startSysTimer();
+    } catch (e) { if (!quiet) toast(errText(e), 'bad'); }
+  }
+
+  /* ---------------------------------------------------------------- Geräte */
+  function deviceItem(d) {
+    const li = el('li', { class: 'item' + (d.status === 'getrennt' ? ' inactive' : '') });
+    const top = el('div', { class: 'item-top' }, [el('strong', { text: d.name || d.port || d.key }), el('span', { class: 'tag role-' + d.rolle, text: d.rolle }), el('span', { class: 'tag status-' + d.status, text: d.status })]);
+    if (d.port) top.appendChild(el('span', { class: 'tag mono', text: d.port }));
+    if (d.vendor_id) top.appendChild(el('span', { class: 'tag mono', text: d.vendor_id + ':' + (d.product_id || '????') }));
+    li.appendChild(top);
+    const parts = [];
+    if (d.hersteller) parts.push(d.hersteller); if (d.produkt && d.produkt !== d.name) parts.push(d.produkt);
+    if (d.sichtungen) parts.push(d.sichtungen + '× gesehen'); if (d.zuletzt) parts.push('zuletzt ' + fmtDate(d.zuletzt));
+    if (parts.length) li.appendChild(el('p', { class: 'item-text', text: parts.join(' · ') }));
+    if (d.notiz) li.appendChild(el('p', { class: 'item-text', text: '📝 ' + d.notiz }));
+    const foot = el('div', { class: 'item-foot' });
+    if (d.port) { const b = el('button', { type: 'button', class: 'btn ghost small', text: 'lesen' }); b.addEventListener('click', () => { $('#ge-port').value = d.port; $('#ge-port').focus(); }); foot.appendChild(b); }
+    const note = el('button', { type: 'button', class: 'btn ghost small', text: 'Notiz' });
+    note.addEventListener('click', async () => { const t = window.prompt('Notiz zu ' + (d.name || d.key), d.notiz || ''); if (t === null) return; try { await api('POST', '/api/geraete/notiz', { key: d.key, notiz: t }); loadDevices(); } catch (e) { toast(errText(e), 'bad'); } });
+    foot.appendChild(note);
+    const del = el('button', { type: 'button', class: 'icon-btn', title: 'aus Verlauf löschen', text: '✕' });
+    del.addEventListener('click', async () => { if (!window.confirm('Gerät »' + (d.name || d.key) + '« aus dem Verlauf löschen?')) return; try { await api('DELETE', '/api/geraete/' + encodeURIComponent(d.key)); loadDevices(); } catch (e) { toast(errText(e), 'bad'); } });
+    foot.appendChild(del);
+    li.appendChild(foot);
+    return li;
+  }
+  async function loadDevices() {
+    try {
+      const data = await api('GET', '/api/geraete' + ($('#ge-verbunden').checked ? '?verbunden=1' : ''));
+      const list = $('#ge-list'); list.replaceChildren();
+      $('#ge-empty').hidden = data.geraete.length > 0;
+      const ports = $('#ge-ports'); ports.replaceChildren();
+      for (const d of data.geraete) { list.appendChild(deviceItem(d)); if (d.port) ports.appendChild(el('option', { value: d.port })); }
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+  async function scanDevices() {
+    const btn = $('#btn-ge-scan'); btn.disabled = true; btn.textContent = 'suche …';
+    try { const data = await api('POST', '/api/geraete/scan', {}); toast(data.gefunden.length + ' Gerät(e) erkannt', data.gefunden.length ? 'ok' : ''); loadDevices(); }
+    catch (e) { toast(errText(e), 'bad'); }
+    finally { btn.disabled = false; btn.textContent = 'Geräte erkennen'; }
+  }
+  async function readSerial(e) {
+    e.preventDefault();
+    const msg = $('#ge-read-msg'); msg.textContent = 'lese …'; $('#btn-ge-read').disabled = true;
+    try {
+      const data = await api('POST', '/api/geraete/lesen', { port: $('#ge-port').value.trim(), baud: Number($('#ge-baud').value), sekunden: Number($('#ge-sek').value) });
+      msg.textContent = data.lesung.bytes + ' Bytes in ' + de(data.lesung.dauer_s, 1) + ' s · Format ' + data.telemetrie.format;
+      const rows = Object.entries(data.telemetrie.werte || {}).map(([k, v]) => [k, typeof v === 'number' ? de(v, 4) : String(v)]);
+      kvRows($('#ge-telemetry'), rows);
+      $('#ge-telemetry-empty').hidden = rows.length > 0;
+      if (!rows.length) $('#ge-telemetry-empty').textContent = data.lesung.bytes ? 'Daten empfangen, aber kein bekanntes Format erkannt (siehe Rohdaten).' : 'Keine Daten empfangen – Baudrate und Verkabelung prüfen.';
+      $('#ge-raw').textContent = data.lesung.text || '';
+    } catch (err) { msg.textContent = errText(err); }
+    finally { $('#btn-ge-read').disabled = false; }
+  }
+
+  /* ---------------------------------------------------------------- 3D-Betrachter */
+  const V = { yaw: 0.7, pitch: -0.5, zoom: 1, panX: 0, panY: 0, tris: null, drag: null, spin: false, raf: null };
+  function prepareMesh(mesh) {
+    const pts = mesh.punkte, tris = mesh.dreiecke;
+    let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (const p of pts) for (let i = 0; i < 3; i++) { if (p[i] < min[i]) min[i] = p[i]; if (p[i] > max[i]) max[i] = p[i]; }
+    const c = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+    const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]) || 1;
+    const centered = pts.map(p => [(p[0] - c[0]) / size, (p[1] - c[1]) / size, (p[2] - c[2]) / size]);
+    V.tris = tris.map(t => [centered[t[0]], centered[t[1]], centered[t[2]]]);
+    V.count = tris.length;
+  }
+  function rot(p) {
+    const cy = Math.cos(V.yaw), sy = Math.sin(V.yaw), cp = Math.cos(V.pitch), sp = Math.sin(V.pitch);
+    const x1 = p[0] * cy - p[1] * sy, y1 = p[0] * sy + p[1] * cy, z1 = p[2];
+    return [x1, y1 * cp - z1 * sp, y1 * sp + z1 * cp];
+  }
+  function drawViewer() {
+    const canvas = $('#m3-viewer'); const { ctx, w, h } = canvasSize(canvas);
+    ctx.clearRect(0, 0, w, h);
+    // Bodenraster
+    ctx.strokeStyle = 'rgba(39, 80, 122, 0.35)'; ctx.lineWidth = 1;
+    const scale = Math.min(w, h) * 0.6 * V.zoom, cx = w / 2 + V.panX, cy = h / 2 + V.panY;
+    const proj = (p) => { const r = rot(p); const persp = 1 / (1.8 - r[1] * 0.6); return [cx + r[0] * scale * persp, cy - r[2] * scale * persp, r[1]]; };
+    for (let i = -5; i <= 5; i++) {
+      const a = proj([i / 5, -1, -0.5]), b = proj([i / 5, 1, -0.5]), c = proj([-1, i / 5, -0.5]), d = proj([1, i / 5, -0.5]);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+    }
+    if (!V.tris) { ctx.fillStyle = '#8ea6bf'; ctx.font = '13px system-ui'; ctx.textAlign = 'center'; ctx.fillText('Modell wählen oder erzeugen', w / 2, h / 2); return; }
+    const light = [0.4, -0.6, 0.7]; const ll = Math.hypot(...light); light[0] /= ll; light[1] /= ll; light[2] /= ll;
+    const faces = [];
+    for (const t of V.tris) {
+      const a = proj(t[0]), b = proj(t[1]), c = proj(t[2]);
+      // Normale im gedrehten Raum (für Beleuchtung)
+      const r0 = rot(t[0]), r1 = rot(t[1]), r2 = rot(t[2]);
+      const u = [r1[0] - r0[0], r1[1] - r0[1], r1[2] - r0[2]], v = [r2[0] - r0[0], r2[1] - r0[1], r2[2] - r0[2]];
+      const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+      const shade = Math.max(0, (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]) / nl);
+      faces.push({ a, b, c, depth: (a[2] + b[2] + c[2]) / 3, shade, back: n[1] / nl > 0 });
+    }
+    faces.sort((p, q) => q.depth - p.depth);
+    const edges = $('#m3-edges').checked && V.count <= 60000;
+    for (const f of faces) {
+      const l = 0.25 + 0.75 * f.shade;
+      ctx.fillStyle = 'rgba(' + Math.round(40 + 60 * l) + ',' + Math.round(140 + 100 * l) + ',' + Math.round(200 + 55 * l) + ',' + (f.back ? 0.55 : 0.95) + ')';
+      ctx.beginPath(); ctx.moveTo(f.a[0], f.a[1]); ctx.lineTo(f.b[0], f.b[1]); ctx.lineTo(f.c[0], f.c[1]); ctx.closePath(); ctx.fill();
+      if (edges) { ctx.strokeStyle = 'rgba(5, 9, 18, 0.35)'; ctx.lineWidth = 0.6; ctx.stroke(); }
+    }
+    // Achsen
+    const o = proj([0, 0, -0.5]);
+    for (const [axis, col] of [[[0.35, 0, -0.5], '#ff5e7a'], [[0, 0.35, -0.5], '#38e8a0'], [[0, 0, -0.15], '#3fe0ff']]) {
+      const q = proj(axis); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(o[0], o[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+    }
+  }
+  function spinLoop() { if (!V.spin) { V.raf = null; return; } V.yaw += 0.01; drawViewer(); V.raf = requestAnimationFrame(spinLoop); }
+  function bindViewer() {
+    const c = $('#m3-viewer');
+    c.addEventListener('pointerdown', (e) => { V.drag = { x: e.clientX, y: e.clientY, shift: e.shiftKey }; c.setPointerCapture(e.pointerId); });
+    c.addEventListener('pointermove', (e) => {
+      if (!V.drag) return;
+      const dx = e.clientX - V.drag.x, dy = e.clientY - V.drag.y; V.drag.x = e.clientX; V.drag.y = e.clientY;
+      if (V.drag.shift) { V.panX += dx; V.panY += dy; } else { V.yaw += dx * 0.01; V.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, V.pitch - dy * 0.01)); }
+      drawViewer();
+    });
+    c.addEventListener('pointerup', () => { V.drag = null; });
+    c.addEventListener('wheel', (e) => { e.preventDefault(); V.zoom = Math.max(0.2, Math.min(8, V.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); drawViewer(); }, { passive: false });
+    $('#btn-m3-reset').addEventListener('click', () => { V.yaw = 0.7; V.pitch = -0.5; V.zoom = 1; V.panX = 0; V.panY = 0; drawViewer(); });
+    $('#m3-edges').addEventListener('change', drawViewer);
+    $('#m3-spin').addEventListener('change', () => { V.spin = $('#m3-spin').checked; if (V.spin && !V.raf) V.raf = requestAnimationFrame(spinLoop); });
+    window.addEventListener('resize', () => { if (P3.view === '3d') drawViewer(); if (P3.view === 'welt') drawMap(); });
+  }
+
+  /* ---------------------------------------------------------------- 3D-Modelle */
+  let m3Arten = [];
+  function paramFields(box, params, prefix) {
+    box.replaceChildren();
+    for (const p of params) {
+      const id = prefix + '-p-' + p.name;
+      const input = el('input', { class: 'input mono', id, name: p.name, placeholder: p.standard === null || p.standard === undefined ? 'erforderlich' : String(p.standard) });
+      if (p.standard !== null && p.standard !== undefined) input.value = String(p.standard);
+      box.appendChild(el('div', { class: 'field' + (p.name === 'holes' || p.name === 'heights_mm' ? ' wide' : '') }, [el('label', { for: id, text: p.name }), input, el('p', { class: 'hint', text: p.beschreibung })]));
+    }
+  }
+  function collectParams(box) {
+    const out = {};
+    for (const inp of $$('input', box)) { const v = inp.value.trim(); if (v !== '') out[inp.name] = v; }
+    return out;
+  }
+  async function loadModels3d() {
+    try {
+      if (!m3Arten.length) {
+        const a = await api('GET', '/api/modelle3d/arten'); m3Arten = a.arten;
+        const sel = $('#m3-art'); sel.replaceChildren();
+        for (const art of m3Arten) sel.appendChild(el('option', { value: art.art, text: art.art }));
+        sel.addEventListener('change', showArt); showArt();
+      }
+      const data = await api('GET', '/api/modelle3d');
+      const list = $('#m3-list'); list.replaceChildren();
+      $('#m3-empty').hidden = data.modelle.length > 0;
+      for (const m of data.modelle) {
+        const li = el('li', { class: 'item selectable' + (P3.model && P3.model.id === m.id ? ' selected' : ''), tabindex: 0, role: 'button' });
+        const st = m.statistik || {};
+        li.appendChild(el('div', { class: 'item-top' }, [el('strong', { text: m.name }), el('span', { class: 'tag', text: 'v' + m.version }), el('span', { class: 'tag kind', text: m.art || 'import' }), m.projekt ? el('span', { class: 'tag', text: m.projekt }) : null]));
+        li.appendChild(el('div', { class: 'item-foot' }, [el('span', { text: st.dreiecke + ' Dreiecke' }), el('span', { text: de(st.volumen_cm3, 2) + ' cm³' }), st.masse_g !== null && st.masse_g !== undefined ? el('span', { text: de(st.masse_g, 1) + ' g' }) : null, el('span', { class: st.wasserdicht ? 'ok' : 'bad', text: st.wasserdicht ? 'wasserdicht' : 'offen' })]));
+        const open = () => showModel(m.id);
+        li.addEventListener('click', open); li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        list.appendChild(li);
+      }
+      drawViewer();
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+  function showArt() {
+    const art = m3Arten.find(a => a.art === $('#m3-art').value); if (!art) return;
+    $('#m3-art-desc').textContent = art.beschreibung;
+    paramFields($('#m3-params'), art.parameter, 'm3');
+  }
+  async function createModel(e) {
+    e.preventDefault();
+    const msg = $('#m3-msg'); msg.textContent = 'erzeuge …'; $('#btn-m3-create').disabled = true;
+    try {
+      const body = { art: $('#m3-art').value, parameter: collectParams($('#m3-params')), name: $('#m3-name').value.trim() || undefined, projekt: $('#m3-projekt').value.trim() || undefined, material: $('#m3-material').value.trim() || undefined };
+      const data = await api('POST', '/api/modelle3d', body);
+      msg.textContent = ''; toast('Modell »' + data.modell.name + '« v' + data.modell.version + ' erzeugt', 'ok');
+      await loadModels3d(); showModel(data.modell.id);
+    } catch (err) { msg.textContent = errText(err); }
+    finally { $('#btn-m3-create').disabled = false; }
+  }
+  async function showModel(id) {
+    try {
+      const data = await api('GET', '/api/modelle3d/' + id + '/mesh');
+      P3.model = data.modell; prepareMesh(data.mesh); drawViewer();
+      $$('#m3-list .item').forEach(n => n.classList.remove('selected'));
+      $('#m3-current').textContent = data.modell.name + ' v' + data.modell.version;
+      const st = data.modell.statistik || {}, bb = st.bounding_box || {}, size = bb.groesse || [0, 0, 0], com = st.schwerpunkt || [0, 0, 0];
+      kvRows($('#m3-stats'), [
+        ['Dreiecke', st.dreiecke + ' (' + st.punkte + ' Punkte)'], ['Maße', de(size[0], 2) + ' × ' + de(size[1], 2) + ' × ' + de(size[2], 2) + ' mm'],
+        ['Volumen', de(st.volumen_cm3, 3) + ' cm³'], ['Oberfläche', de(st.flaeche_cm2, 2) + ' cm²'],
+        ['Masse', st.masse_g !== null && st.masse_g !== undefined ? de(st.masse_g, 2) + ' g (' + (st.material || data.modell.material) + ')' : 'Material angeben'],
+        ['Schwerpunkt', '(' + de(com[0], 1) + '; ' + de(com[1], 1) + '; ' + de(com[2], 1) + ') mm'],
+        ['Wasserdicht', st.wasserdicht ? 'ja' : 'nein', st.wasserdicht ? 'ok' : 'bad'],
+        ['Parameter', Object.entries(data.modell.parameter || {}).map(([k, v]) => k + '=' + v).join(', ') || '–'],
+        ['Datei', el('span', { class: 'mono', text: data.modell.datei })],
+      ]);
+      const a = $('#btn-m3-stl'); a.hidden = false; a.href = '/api/modelle3d/' + id + '/stl'; a.setAttribute('download', data.modell.name + '_v' + data.modell.version + '.stl');
+      const del = $('#btn-m3-delete'); del.hidden = false;
+      del.onclick = async () => { if (!window.confirm('Modell »' + data.modell.name + '« v' + data.modell.version + ' löschen?')) return; try { await api('DELETE', '/api/modelle3d/' + id); P3.model = null; V.tris = null; $('#m3-current').textContent = ''; a.hidden = true; del.hidden = true; kvRows($('#m3-stats'), []); loadModels3d(); } catch (e) { toast(errText(e), 'bad'); } };
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+
+  /* ---------------------------------------------------------------- Simulation */
+  let siArten = [], siSeries = [], siX = [], siResult = null;
+  async function loadSimulations() {
+    try {
+      if (!siArten.length) {
+        const a = await api('GET', '/api/simulation/arten'); siArten = a.arten;
+        const sel = $('#si-art'); sel.replaceChildren();
+        for (const art of siArten) sel.appendChild(el('option', { value: art.art, text: art.art + ' – ' + art.beschreibung.split(':')[0] }));
+        sel.addEventListener('change', showSimArt); showSimArt();
+      }
+      if (siResult) drawSim();
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+  function showSimArt() {
+    const art = siArten.find(a => a.art === $('#si-art').value); if (!art) return;
+    $('#si-art-desc').textContent = art.beschreibung;
+    paramFields($('#si-params'), art.parameter, 'si');
+  }
+  const LABELS = { flugzeit_min: 'Flugzeit (min)', flugzeit_s: 'Flugzeit (s)', endwert: 'Endwert', stellgroesse_max: 'max. Stellgröße', stationaerer_fehler: 'stationärer Fehler', durchbiegung_min_mm: 'Durchbiegung min (mm)', durchbiegung_max_mm: 'Durchbiegung max (mm)', waermekapazitaet_j_k: 'Wärmekapazität (J/K)', waermeleitwert_w_k: 'Wärmeleitwert (W/K)', temperatur_nach_dauer_c: 'Temperatur am Ende (°C)', schwebeschub_n: 'Schwebeschub (N)', ohne_luft_geschwindigkeit_m_s: 'ohne Luft (m/s)', ohne_luft_fallzeit_s: 'Fallzeit ohne Luft (s)', energie_wh: 'Energie (Wh)', restkapazitaet_prozent: 'Restkapazität (%)', endspannung_v: 'Endspannung (V)', grund: 'Ende', strom_gesamt_a: 'Gesamtstrom (A)', gesamtmasse_g: 'Gesamtmasse (g)', zeit_bis_hoehe_s: 'Zeit bis Höhe (s)', max_steigrate_m_s: 'max. Steigrate (m/s)', ueberschwingen_m: 'Überschwingen (m)', endhoehe_m: 'Endhöhe (m)', schub_gewicht_verhaeltnis: 'Schub/Gewicht', aufprallgeschwindigkeit_m_s: 'Aufprall (m/s)', aufprallgeschwindigkeit_kmh: 'Aufprall (km/h)', fallzeit_s: 'Fallzeit (s)', grenzgeschwindigkeit_m_s: 'Grenzgeschwindigkeit (m/s)', aufprallenergie_j: 'Aufprallenergie (J)', endtemperatur_c: 'Endtemperatur (°C)', zeitkonstante_s: 'Zeitkonstante (s)', zeit_bis_80_prozent_s: 'Zeit bis 80 % (s)', ueberschwingen_prozent: 'Überschwingen (%)', einschwingzeit_s: 'Einschwingzeit (s)', anstiegszeit_s: 'Anstiegszeit (s)', stationaerer_fehler_prozent: 'stationärer Fehler (%)', zeit_bis_leer_min: 'Zeit bis leer (min)', c_rate: 'C-Rate', min_hoehe_sicher_mm: 'kleinste sichere Höhe (mm)', zulaessige_spannung_mpa: 'zulässige Spannung (MPa)', material: 'Material', e_modul_gpa: 'E-Modul (GPa)' };
+  async function runSimulation(e) {
+    e.preventDefault();
+    const msg = $('#si-msg'); msg.textContent = 'rechne …'; $('#btn-si-run').disabled = true;
+    try {
+      const data = await api('POST', '/api/simulation', { art: $('#si-art').value, parameter: collectParams($('#si-params')) });
+      siResult = data.ergebnis; msg.textContent = '';
+      const r = siResult;
+      kvRows($('#si-summary'), Object.entries(r.zusammenfassung || {}).map(([k, v]) => [LABELS[k] || k, typeof v === 'number' ? de(v, 3) : (v === null ? '–' : String(v))]));
+      const wl = $('#si-warnings'); wl.replaceChildren(); for (const w of r.warnungen || []) wl.appendChild(el('li', { text: w }));
+      $('#si-text').textContent = data.text;
+      siX = r.zeit_s || r.x || [];
+      siSeries = Object.entries(r.reihen || {}).map(([k, vals], i) => ({ key: k, label: k + (r.einheiten && r.einheiten[k] ? ' (' + r.einheiten[k] + ')' : ''), color: COLORS[i % COLORS.length], values: vals, hidden: i > 1 }));
+      renderLegend($('#si-legend'), siSeries, drawSim);
+      $('#si-empty').hidden = true; $('#btn-si-csv').hidden = false;
+      drawSim();
+    } catch (err) { msg.textContent = errText(err); }
+    finally { $('#btn-si-run').disabled = false; }
+  }
+  function drawSim() { if (!siResult) return; drawChart($('#si-chart'), siX, siSeries, { xlabel: siResult.zeit_s ? 's' : (siResult.x_name || 'x') + ' (' + (siResult.x_einheit || '') + ')' }); }
+  function downloadCsv() {
+    if (!siResult) return;
+    const names = Object.keys(siResult.reihen || {});
+    const lines = [(siResult.zeit_s ? 'zeit_s' : siResult.x_name || 'x') + ';' + names.join(';')];
+    siX.forEach((x, i) => lines.push([x].concat(names.map(n => siResult.reihen[n][i])).map(v => String(v).replace('.', ',')).join(';')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'simulation_' + siResult.typ + '.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /* ---------------------------------------------------------------- Weltkarte (Web-Mercator, offline) */
+  const M = { zoom: 1.6, lat: 30, lon: 10, places: [], routes: [], plan: null, draft: [], terminator: [], subsolar: null, drag: null, tiles: {}, useTiles: false, cursor: null };
+  const TILE = 256;
+  function mercX(lon, z) { return (lon + 180) / 360 * TILE * Math.pow(2, z); }
+  function mercY(lat, z) { const r = Math.max(-85.05, Math.min(85.05, lat)) * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * TILE * Math.pow(2, z); }
+  function unmerc(x, y, z) { const n = TILE * Math.pow(2, z); const lon = x / n * 360 - 180; const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI; return [lat, lon]; }
+  function mapScreen(lat, lon, w, h) { return [w / 2 + mercX(lon, M.zoom) - mercX(M.lon, M.zoom), h / 2 + mercY(lat, M.zoom) - mercY(M.lat, M.zoom)]; }
+  function mapLatLon(px, py, w, h) { return unmerc(mercX(M.lon, M.zoom) + px - w / 2, mercY(M.lat, M.zoom) + py - h / 2, M.zoom); }
+  function tileImage(z, x, y) {
+    const n = Math.pow(2, z); x = ((x % n) + n) % n; if (y < 0 || y >= n) return null;
+    const key = z + '/' + x + '/' + y;
+    if (M.tiles[key]) return M.tiles[key];
+    const img = new Image(); img.decoding = 'async';
+    img.onload = () => { if (P3.view === 'welt') drawMap(); };
+    img.onerror = () => { img.failed = true; };
+    img.src = P3.kacheln.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+    M.tiles[key] = img; return img;
+  }
+  function drawMap() {
+    const canvas = $('#we-map'); const { ctx, w, h } = canvasSize(canvas);
+    ctx.fillStyle = '#050912'; ctx.fillRect(0, 0, w, h);
+    const z = Math.floor(M.zoom), scale = Math.pow(2, M.zoom - z);
+    if (M.useTiles && P3.kacheln) {
+      const x0 = mercX(M.lon, M.zoom) - w / 2, y0 = mercY(M.lat, M.zoom) - h / 2;
+      const tx0 = Math.floor(x0 / (TILE * scale)), tx1 = Math.floor((x0 + w) / (TILE * scale)), ty0 = Math.floor(y0 / (TILE * scale)), ty1 = Math.floor((y0 + h) / (TILE * scale));
+      ctx.globalAlpha = 0.85;
+      for (let tx = tx0; tx <= tx1; tx++) for (let ty = ty0; ty <= ty1; ty++) {
+        const img = tileImage(z, tx, ty); if (!img || !img.complete || img.failed || !img.naturalWidth) continue;
+        ctx.drawImage(img, tx * TILE * scale - x0, ty * TILE * scale - y0, TILE * scale + 0.5, TILE * scale + 0.5);
+      }
+      ctx.globalAlpha = 1;
+    }
+    // Gradnetz
+    const step = M.zoom < 2 ? 30 : M.zoom < 4 ? 10 : M.zoom < 6 ? 5 : M.zoom < 8 ? 1 : M.zoom < 11 ? 0.25 : 0.05;
+    ctx.strokeStyle = M.useTiles ? 'rgba(63, 224, 255, 0.25)' : 'rgba(39, 80, 122, 0.7)'; ctx.lineWidth = 1; ctx.fillStyle = '#8ea6bf'; ctx.font = '10px ui-monospace, monospace';
+    const [latN, lonW] = mapLatLon(0, 0, w, h), [latS, lonE] = mapLatLon(w, h, w, h);
+    for (let lon = Math.floor(lonW / step) * step; lon <= lonE + step; lon += step) { const [x] = mapScreen(0, lon, w, h); ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); ctx.fillText(fmtDeg(lon, 'EW'), x + 2, h - 4); }
+    for (let lat = Math.floor(latS / step) * step; lat <= Math.min(85, latN + step); lat += step) { const [, y] = mapScreen(lat, 0, w, h); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); ctx.fillText(fmtDeg(lat, 'NS'), 3, y - 2); }
+    // Äquator & Wendekreise hervorheben
+    ctx.strokeStyle = 'rgba(63, 224, 255, 0.35)';
+    for (const lat of [0, 23.44, -23.44, 66.56, -66.56]) { const [, y] = mapScreen(lat, 0, w, h); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    // Tag-Nacht-Grenze
+    if (M.terminator.length) {
+      ctx.strokeStyle = 'rgba(255, 200, 87, 0.8)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]); ctx.beginPath();
+      const pts = M.terminator.map(p => mapScreen(p[0], p[1], w, h)).sort((a, b) => a[0] - b[0]);
+      // Doppelt zeichnen (−360° und +360°), damit die Linie über den Datumsgrenzen-Umbruch läuft
+      for (const off of [-TILE * Math.pow(2, M.zoom), 0, TILE * Math.pow(2, M.zoom)]) { let first = true; for (const p of pts) { if (first) { ctx.moveTo(p[0] + off, p[1]); first = false; } else ctx.lineTo(p[0] + off, p[1]); } }
+      ctx.stroke(); ctx.setLineDash([]);
+      if (M.subsolar) { const [sx, sy] = mapScreen(M.subsolar[0], M.subsolar[1], w, h); ctx.fillStyle = '#ffc857'; ctx.beginPath(); ctx.arc(sx, sy, 6, 0, Math.PI * 2); ctx.fill(); ctx.fillText('☀', sx + 8, sy + 4); }
+    }
+    // Routen
+    const drawLine = (pts, color, width, dash) => { if (pts.length < 2) return; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); pts.forEach((p, i) => { const [x, y] = mapScreen(p[0], p[1], w, h); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); };
+    for (const r of M.routes) drawLine(r.punkte, 'rgba(79, 140, 255, 0.9)', 2);
+    if (M.plan) M.plan.abschnitte.forEach(l => drawLine([l.von, l.nach], l.fliegbar ? 'rgba(56, 232, 160, 0.95)' : 'rgba(255, 94, 122, 0.95)', 2.5));
+    drawLine(M.draft, 'rgba(255, 200, 87, 0.9)', 2, [4, 4]);
+    // Orte
+    ctx.font = '12px system-ui';
+    for (const p of M.places) { const [x, y] = mapScreen(p.lat, p.lon, w, h); ctx.fillStyle = '#3fe0ff'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#f4f9ff'; ctx.fillText(p.name, x + 7, y + 4); }
+    M.draft.forEach((p, i) => { const [x, y] = mapScreen(p[0], p[1], w, h); ctx.fillStyle = '#ffc857'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffc857'; ctx.fillText(String(i + 1), x + 6, y - 4); });
+    if (M.useTiles) { ctx.fillStyle = 'rgba(5, 9, 18, 0.7)'; ctx.fillRect(w - 230, h - 18, 230, 18); ctx.fillStyle = '#dbe7f3'; ctx.font = '10px system-ui'; ctx.fillText('Kartendaten © OpenStreetMap-Mitwirkende (ODbL)', w - 226, h - 6); }
+  }
+  function fmtDeg(v, hemi) { const a = Math.abs(v); const s = (Number.isInteger(a) ? a : a.toFixed(2).replace('.', ',')) + '°'; return v === 0 ? s : s + (v > 0 ? hemi[0] : hemi[1]); }
+  function bindMap() {
+    const c = $('#we-map');
+    c.addEventListener('pointerdown', (e) => { M.drag = { x: e.clientX, y: e.clientY, moved: false }; c.setPointerCapture(e.pointerId); });
+    c.addEventListener('pointermove', (e) => {
+      const r = c.getBoundingClientRect(); const ll = mapLatLon(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+      $('#we-cursor').textContent = ll[0].toFixed(4) + ', ' + ll[1].toFixed(4);
+      if (!M.drag) return;
+      const dx = e.clientX - M.drag.x, dy = e.clientY - M.drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) M.drag.moved = true;
+      if (!M.drag.moved) return;
+      M.drag.x = e.clientX; M.drag.y = e.clientY;
+      const [lat, lon] = unmerc(mercX(M.lon, M.zoom) - dx, mercY(M.lat, M.zoom) - dy, M.zoom);
+      M.lat = Math.max(-85, Math.min(85, lat)); M.lon = ((lon + 540) % 360) - 180; drawMap();
+    });
+    c.addEventListener('pointerup', (e) => {
+      const wasClick = M.drag && !M.drag.moved; M.drag = null;
+      if (wasClick && $('#we-pick').checked) {
+        const r = c.getBoundingClientRect(); const ll = mapLatLon(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
+        M.draft.push([+ll[0].toFixed(5), +ll[1].toFixed(5)]);
+        $('#we-plan-points').value = M.draft.map(p => p[0] + ', ' + p[1]).join('; ');
+        drawMap();
+      }
+    });
+    c.addEventListener('wheel', (e) => { e.preventDefault(); zoomMap(e.deltaY < 0 ? 0.5 : -0.5); }, { passive: false });
+    c.addEventListener('dblclick', (e) => { const r = c.getBoundingClientRect(); const ll = mapLatLon(e.clientX - r.left, e.clientY - r.top, r.width, r.height); M.lat = ll[0]; M.lon = ll[1]; zoomMap(1); });
+    $('#btn-we-zoom-in').addEventListener('click', () => zoomMap(1));
+    $('#btn-we-zoom-out').addEventListener('click', () => zoomMap(-1));
+    $('#btn-we-world').addEventListener('click', () => { M.zoom = 1.6; M.lat = 30; M.lon = 10; drawMap(); });
+    $('#we-pick').addEventListener('change', () => { c.classList.toggle('pick', $('#we-pick').checked); if (!$('#we-pick').checked) { M.draft = []; drawMap(); } });
+    $('#we-tiles').addEventListener('change', () => { M.useTiles = $('#we-tiles').checked; store.set('kacheln', M.useTiles ? '1' : '0'); drawMap(); });
+  }
+  function zoomMap(d) { M.zoom = Math.max(0.5, Math.min(17, M.zoom + d)); drawMap(); }
+  async function loadWorld() {
+    try {
+      const st = O.state && O.state.status ? O.state.status : null;
+      const status = st || await api('GET', '/api/status');
+      P3.kacheln = status.kacheln_url || null;
+      const tilesBox = $('#we-tiles'); tilesBox.disabled = !P3.kacheln;
+      if (P3.kacheln) { M.useTiles = store.get('kacheln', '0') === '1'; tilesBox.checked = M.useTiles; $('#we-tiles-note').textContent = 'Kartenkacheln kommen von OpenStreetMap (Internet nötig, nur wenn eingeschaltet). Gradnetz, Tag-Nacht-Grenze, Orte und Routen funktionieren auch offline.'; }
+      else { M.useTiles = false; tilesBox.checked = false; }
+      const [orte, routen, sonne] = await Promise.all([api('GET', '/api/geo/orte'), api('GET', '/api/geo/routen'), api('GET', '/api/geo/sonne?lat=' + M.lat + '&lon=' + M.lon)]);
+      M.places = orte.orte; M.routes = routen.routen; M.terminator = sonne.sonne.terminator || []; M.subsolar = sonne.sonne.subsolar || null;
+      $('#we-clock').textContent = 'UTC ' + (sonne.sonne.zeit_utc || '').slice(11, 16);
+      const pl = $('#we-places'); pl.replaceChildren();
+      if (!M.places.length) pl.appendChild(el('li', { class: 'muted-note', text: 'Noch keine Orte gespeichert.' }));
+      for (const p of M.places) {
+        const li = el('li', { class: 'item' });
+        const top = el('div', { class: 'item-top' }, [el('strong', { text: p.name }), el('span', { class: 'tag mono', text: p.koordinate }), p.projekt ? el('span', { class: 'tag', text: p.projekt }) : null, el('span', { class: 'spacer' })]);
+        const go = el('button', { type: 'button', class: 'btn ghost small', text: 'zeigen' }); go.addEventListener('click', () => { M.lat = p.lat; M.lon = p.lon; M.zoom = Math.max(M.zoom, 6); drawMap(); });
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Ort löschen', text: '✕' });
+        del.addEventListener('click', async () => { if (!window.confirm('Ort »' + p.name + '« löschen?')) return; try { await api('DELETE', '/api/geo/orte/' + p.id); loadWorld(); } catch (e) { toast(errText(e), 'bad'); } });
+        top.append(go, del); li.appendChild(top); pl.appendChild(li);
+      }
+      const rl = $('#we-routes'); rl.replaceChildren();
+      if (!M.routes.length) rl.appendChild(el('li', { class: 'muted-note', text: 'Noch keine Routen gespeichert.' }));
+      for (const r of M.routes) {
+        const li = el('li', { class: 'item' });
+        const top = el('div', { class: 'item-top' }, [el('strong', { text: r.name }), el('span', { class: 'tag', text: r.punkte.length + ' Punkte' }), el('span', { class: 'tag mono', text: de(r.laenge_m / 1000, 2) + ' km' }), r.projekt ? el('span', { class: 'tag', text: r.projekt }) : null, el('span', { class: 'spacer' })]);
+        const use = el('button', { type: 'button', class: 'btn ghost small', text: 'planen' }); use.addEventListener('click', () => { $('#we-plan-points').value = r.punkte.map(p => p[0] + ', ' + p[1]).join('; '); M.lat = r.punkte[0][0]; M.lon = r.punkte[0][1]; M.zoom = Math.max(M.zoom, 7); drawMap(); });
+        const del = el('button', { type: 'button', class: 'icon-btn', title: 'Route löschen', text: '✕' });
+        del.addEventListener('click', async () => { if (!window.confirm('Route »' + r.name + '« löschen?')) return; try { await api('DELETE', '/api/geo/routen/' + r.id); loadWorld(); } catch (e) { toast(errText(e), 'bad'); } });
+        top.append(use, del); li.appendChild(top); rl.appendChild(li);
+      }
+      drawMap();
+    } catch (e) { toast(errText(e), 'bad'); }
+  }
+  async function savePlace(e) {
+    e.preventDefault();
+    try { await api('POST', '/api/geo/orte', { name: $('#we-place-name').value.trim(), koordinate: $('#we-place-coord').value.trim() }); $('#we-place-name').value = ''; $('#we-place-coord').value = ''; toast('Ort gespeichert', 'ok'); loadWorld(); }
+    catch (err) { $('#we-msg').textContent = errText(err); }
+  }
+  async function planRoute(e) {
+    e.preventDefault();
+    const box = $('#we-plan-result'); box.replaceChildren(); $('#we-msg').textContent = '';
+    try {
+      const body = { punkte: $('#we-plan-points').value.trim(), geschwindigkeit_m_s: Number($('#we-plan-speed').value), wind_kmh: Number($('#we-plan-wind').value), wind_aus_deg: Number($('#we-plan-wind-from').value) };
+      const data = await api('POST', '/api/geo/plan', body);
+      M.plan = data.plan; drawMap();
+      const t = el('table', { class: 'table' }, el('tr', {}, ['#', 'Distanz', 'Kurs', 'über Grund', 'Zeit'].map(h => el('th', { text: h }))));
+      data.plan.abschnitte.forEach((l, i) => t.appendChild(el('tr', { class: l.fliegbar ? '' : 'bad' }, [el('td', { text: String(i + 1) }), el('td', { class: 'num', text: de(l.distanz_m, 0) + ' m' }), el('td', { class: 'num', text: de(l.kurs_deg, 1) + '°' }), el('td', { class: 'num', text: de(l.bodengeschwindigkeit_m_s, 1) + ' m/s' }), el('td', { class: 'num', text: l.zeit_s === null ? 'nicht fliegbar' : de(l.zeit_s, 0) + ' s' })])));
+      box.appendChild(el('p', { class: 'hint', text: 'Gesamt: ' + de(data.plan.strecke_m / 1000, 2) + ' km, ' + de(data.plan.zeit_min, 1) + ' min' + (data.plan.fliegbar ? '' : ' – nicht vollständig fliegbar') }));
+      box.appendChild(t);
+      if (data.plan.warnungen.length) { const ul = el('ul', { class: 'warnlist' }); data.plan.warnungen.forEach(w => ul.appendChild(el('li', { text: w }))); box.appendChild(ul); }
+      const name = $('#we-plan-name').value.trim();
+      if (name) { await api('POST', '/api/geo/routen', { name, punkte: body.punkte }); $('#we-plan-name').value = ''; toast('Route »' + name + '« gespeichert', 'ok'); loadWorld(); }
+    } catch (err) { $('#we-msg').textContent = errText(err); }
+  }
+  async function showSun(e) {
+    e.preventDefault(); $('#we-msg').textContent = '';
+    try {
+      const q = '/api/geo/sonne?ort=' + encodeURIComponent($('#we-sun-place').value.trim()) + ($('#we-sun-date').value ? '&zeit=' + $('#we-sun-date').value + 'T12:00:00Z' : '');
+      const data = await api('GET', q); const s = data.sonne;
+      kvRows($('#we-sun'), [['Ort', de(s.breite, 4) + ', ' + de(s.laenge, 4)], ['Datum', s.datum], ['Aufgang (UTC)', s.aufgang_utc ? s.aufgang_utc.slice(11, 16) : s.hinweis], ['Untergang (UTC)', s.untergang_utc ? s.untergang_utc.slice(11, 16) : '–'], ['Tageslänge', de(s.tageslaenge_h, 2) + ' h'], ['Höhe jetzt/mittags', de(s.hoehe_deg, 1) + '°'], ['Azimut', de(s.azimut_deg, 1) + '°']]);
+    } catch (err) { $('#we-msg').textContent = errText(err); }
+  }
+  async function showWeather() {
+    $('#we-msg').textContent = '';
+    try {
+      const data = await api('GET', '/api/geo/wetter?ort=' + encodeURIComponent($('#we-sun-place').value.trim())); const w = data.wetter;
+      kvRows($('#we-sun'), [['Wetter', w.wetter], ['Temperatur', de(w.temperatur_c, 1) + ' °C'], ['Wind', de(w.wind_kmh, 0) + ' km/h aus ' + de(w.wind_richtung_deg, 0) + '°'], ['Böen', de(w.boeen_kmh, 0) + ' km/h'], ['Niederschlag', de(w.niederschlag_mm, 1) + ' mm'], ['Bewölkung', de(w.bewoelkung_prozent, 0) + ' %'], ['Flugtauglich', w.flugtauglich ? 'ja' : 'nein – ' + (w.gruende || []).join('; '), w.flugtauglich ? 'ok' : 'bad'], ['Quelle', w.quelle + ' · ' + (w.zeit || '') + ' UTC']]);
+    } catch (err) { $('#we-msg').textContent = err.status === 403 ? 'Online-Funktionen sind aus: online=true in der Konfiguration setzen.' : errText(err); }
+  }
+
+  /* ---------------------------------------------------------------- Init */
+  function init() {
+    $('#btn-sy-refresh').addEventListener('click', () => loadSystem(false));
+    $('#sy-live').addEventListener('change', startSysTimer);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stopSysTimer(); else if (P3.view === 'system') startSysTimer(); });
+    $('#btn-ge-scan').addEventListener('click', scanDevices);
+    $('#btn-ge-refresh').addEventListener('click', loadDevices);
+    $('#ge-verbunden').addEventListener('change', loadDevices);
+    $('#ge-read-form').addEventListener('submit', readSerial);
+    bindViewer();
+    $('#m3-form').addEventListener('submit', createModel);
+    $('#btn-m3-refresh').addEventListener('click', loadModels3d);
+    $('#si-form').addEventListener('submit', runSimulation);
+    $('#btn-si-csv').addEventListener('click', downloadCsv);
+    bindMap();
+    $('#we-place-form').addEventListener('submit', savePlace);
+    $('#we-plan-form').addEventListener('submit', planRoute);
+    $('#we-sun-form').addEventListener('submit', showSun);
+    $('#btn-we-weather').addEventListener('click', showWeather);
+    $('#btn-we-refresh').addEventListener('click', loadWorld);
+    const saved = store.get('view', 'uebersicht');
+    if (loaders[saved]) { P3.view = saved; loaders[saved](); }
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();

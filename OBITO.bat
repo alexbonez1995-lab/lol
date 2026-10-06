@@ -1,8 +1,8 @@
 @echo off
 rem ============================================================
 rem  OBITO v4.0 – Starter für Windows 11
-rem  Startet Ollama (falls nötig), prüft das System, startet den
-rem  lokalen Server und öffnet die HUD-Oberfläche als App-Fenster.
+rem  Startet Ollama (falls nötig), prüft das System und startet OBITO
+rem  als App (Server im Hintergrund + HUD als eigenes Fenster).
 rem ============================================================
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
@@ -66,44 +66,18 @@ if errorlevel 1 (
   if errorlevel 2 exit /b 1
 )
 
-rem ---- Server starten ------------------------------------------------
+rem ---- Server + HUD-Fenster in einem Prozess ---------------------------
+rem  "python -m obito app" startet den Server im Hintergrund und oeffnet das HUD
+rem  als App-Fenster (Edge/Chrome ohne Browserleisten). Fenster schliessen beendet OBITO.
 %PY% -c "import urllib.request,sys; urllib.request.urlopen('%OBITO_URL%/api/status', timeout=2); sys.exit(0)" >nul 2>nul
+if not errorlevel 1 echo [INFO]   Ein OBITO-Server laeuft bereits - es wird nur das Fenster geoeffnet.
+echo [OK]     Starte OBITO: %OBITO_URL%
+%PY% -m obito app
 if errorlevel 1 (
-  echo [INFO]   Starte OBITO-Server unter %OBITO_URL% ...
-  start "OBITO Server" /min cmd /c "%PY% -m obito serve"
-  set /a TRIES=0
-  :warte_server
-  %PY% -c "import urllib.request,sys; urllib.request.urlopen('%OBITO_URL%/api/status', timeout=2); sys.exit(0)" >nul 2>nul
-  if errorlevel 1 (
-    set /a TRIES+=1
-    if !TRIES! geq 30 (
-      echo [FEHLER] Der OBITO-Server antwortet nicht. Starte ihn manuell: %PY% -m obito serve
-      pause
-      exit /b 1
-    )
-    timeout /t 1 /nobreak >nul
-    goto warte_server
-  )
-) else (
-  echo [INFO]   OBITO-Server läuft bereits.
+  echo.
+  echo [FEHLER] OBITO wurde mit Fehler beendet. Manuell starten: %PY% -m obito app   (oder: serve)
+  pause
+  exit /b 1
 )
-echo [OK]     OBITO bereit: %OBITO_URL%
-
-rem ---- HUD als App-Fenster öffnen -----------------------------------
-set "EDGE="
-for %%p in (
-  "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-  "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
-  "%LocalAppData%\Microsoft\Edge\Application\msedge.exe"
-) do if not defined EDGE if exist %%p set "EDGE=%%~p"
-if defined EDGE (
-  start "" "%EDGE%" --app=%OBITO_URL% --window-size=1600,950
-) else (
-  where chrome >nul 2>nul && ( start "" chrome --app=%OBITO_URL% ) || ( start "" %OBITO_URL% )
-)
-echo.
-echo OBITO läuft. Dieses Fenster kann geschlossen werden; Server und Ollama laufen weiter.
-echo Beenden: Fenster "OBITO Server" und "Ollama" schließen.
-timeout /t 5 >nul
 endlocal
 exit /b 0

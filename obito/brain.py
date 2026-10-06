@@ -33,6 +33,12 @@ from .agents import (CONSOLIDATION_SCHEMA, CRITIC_SCHEMA, EXPERTS, LESSON_SCHEMA
                      ROUTING_SCHEMA, Expert)
 from .automation import AutomationStore, Scheduler
 from .config import Config, find_config_file, save_config
+from .devices import DeviceStore
+from .devices import register_tools as register_device_tools
+from .geo import WaypointStore
+from .geo import register_tools as register_geo_tools
+from .geometry import ModelStore
+from .geometry import register_tools as register_geometry_tools
 from .knowledge import Chunk, KnowledgeStore
 from .knowledge import register_tools as register_knowledge_tools
 from .learning import Interaction, LearningStore, Lesson, keywords
@@ -41,6 +47,9 @@ from .llm import (BackendUnavailable, ChatResult, LLMBackend, LLMError, ModelInf
 from .memory import Memory, MemoryStore, normalize
 from .missions import MissionRunner, MissionStore
 from .projects import ProjectStore
+from .simulation import register_tools as register_simulation_tools
+from .sysmon import Sampler
+from .sysmon import register_tools as register_sysmon_tools
 from .tools import (ToolRegistry, ToolStreamFilter, default_registry, needs_tools, parse_tool_calls,
                     strip_tool_calls)
 
@@ -300,6 +309,16 @@ class Brain:
                                     log_path=cfg.logs_dir / "automation.log", allow_dangerous=False,
                                     tick_seconds=30)
         register_knowledge_tools(self.tools, self.knowledge)
+        # Phase 3: Geräte, System, 3D-Modelle, Simulation, Welt
+        self.devices = DeviceStore(cfg.devices_db)
+        self.models3d = ModelStore(cfg.models3d_db, cfg.models3d_dir)
+        self.geo = WaypointStore(cfg.geo_db)
+        self.sysmon = Sampler(size=120)
+        register_device_tools(self.tools, self.devices)
+        register_sysmon_tools(self.tools, backend=self.backend, data_dir=str(cfg.data_path), sampler=self.sysmon)
+        register_geometry_tools(self.tools, self.models3d)
+        register_simulation_tools(self.tools)
+        register_geo_tools(self.tools, self.geo, lambda: bool(self.cfg.online))
 
         # Embedder: echtes Backend immer, Fake nur wenn „oben“. Liefert das Backend None
         # (kein Embedding-Modell, Server weg), fällt die Suche auf Volltext zurück.
@@ -1314,6 +1333,10 @@ class Brain:
             "projekte": self.projects.stats(),
             "missionen": {"laufend": self.missions.running(), "anzahl": len(self.missions.store.list())},
             "automationen": {**self.automation.store.stats(), "aktiv": bool(self.automation.running)},
+            "geraete": self.devices.stats(),
+            "modelle3d": self.models3d.stats(),
+            "geo": self.geo.stats(),
+            "online": bool(cfg.online),
         }
 
     def close(self) -> None:
@@ -1334,6 +1357,9 @@ class Brain:
             lambda: _call(getattr(self.missions, "store", None), "close"),
             lambda: _call(self.projects, "close"),
             lambda: _call(self.knowledge, "close"),
+            lambda: _call(getattr(self, "devices", None), "close"),
+            lambda: _call(getattr(self, "models3d", None), "close"),
+            lambda: _call(getattr(self, "geo", None), "close"),
             lambda: self.memory.close(),
             lambda: self.learning.close(),
         ):

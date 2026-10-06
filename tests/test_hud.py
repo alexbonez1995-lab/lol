@@ -319,7 +319,7 @@ class HudPhase2Test(unittest.TestCase):
         if not node:
             self.skipTest("node nicht installiert")
         scripts = re.findall(r"<script>(.*?)</script>", self.html, re.S)
-        self.assertEqual(len(scripts), 2)
+        self.assertEqual(len(scripts), 3)
         for sc in scripts:
             with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
                 fh.write(sc)
@@ -329,3 +329,44 @@ class HudPhase2Test(unittest.TestCase):
                 self.assertEqual(res.returncode, 0, res.stderr)
             finally:
                 os.unlink(path)
+
+
+class HudPhase3Test(unittest.TestCase):
+    """Phase 3: Tabs System, Geräte, 3D-Modellierung, Simulation, Weltkarte."""
+
+    @classmethod
+    def setUpClass(cls):
+        from obito.server import INDEX_PATH
+        cls.html = INDEX_PATH.read_text(encoding="utf-8")
+        scripts = re.findall(r"<script>(.*?)</script>", cls.html, re.S)
+        cls.script = scripts[2] if len(scripts) > 2 else ""
+
+    def test_tabs_and_views(self):
+        for label in ("System", "Geräte", "3D-Modellierung", "Simulation", "Weltkarte"):
+            self.assertIn(">" + label, self.html)
+        for view in ("system", "geraete", "3d", "simulation", "welt"):
+            self.assertIn('id="view-' + view + '"', self.html)
+
+    def test_phase3_api_paths_referenced(self):
+        for path in ("/api/system", "/api/system/verlauf", "/api/geraete", "/api/geraete/scan", "/api/geraete/lesen",
+                     "/api/geraete/notiz", "/api/modelle3d", "/api/modelle3d/arten", "/stl", "/mesh",
+                     "/api/simulation/arten", "/api/simulation", "/api/geo/orte", "/api/geo/routen", "/api/geo/plan",
+                     "/api/geo/sonne", "/api/geo/wetter"):
+            self.assertIn(path, self.script, path)
+
+    def test_offline_map_and_no_hardcoded_tiles(self):
+        # Kachel-URL kommt nur vom Server (Status), nie aus dem HTML
+        self.assertNotIn("openstreetmap.org/", self.html)
+        self.assertIn("kacheln_url", self.script)
+        self.assertIn("terminator", self.script)
+        self.assertIn("OpenStreetMap-Mitwirkende", self.script)
+
+    def test_renderers_present(self):
+        for fn in ("function drawChart", "function drawViewer", "function drawMap", "function prepareMesh",
+                   "requestAnimationFrame", "getContext('2d')"):
+            self.assertIn(fn, self.script)
+        self.assertIn("devicePixelRatio", self.script)
+
+    def test_german_texts(self):
+        for text in ("Geräte erkennen", "Bauteil erzeugen", "Wasserdicht", "Flugplan", "Tag-Nacht-Grenze", "keine Geräte erfunden"):
+            self.assertIn(text, self.html)

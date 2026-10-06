@@ -48,10 +48,16 @@ komplexe das volle Gremium mit Kritiker und Revision.
 | **Projekte** | Projekte mit Notizen, Aufgaben, Entscheidungen, Versionen, Problemen, Dateien. Der Projektkontext steht automatisch im Prompt; Entscheidungen aus Antworten werden als Notiz festgehalten. |
 | **Missionen** | Mehrstufige Aufgaben: planen (JSON-Plan), ausführen (Fragen + Werkzeuge), Bericht, Ablage im Projekt. Im Hintergrund oder Vordergrund, abbrechbar. |
 | **Automationen** | Zeitplaner für Gedächtnis-Konsolidierung, Backups, Eval-Läufe, Wissens-Sync, Missionen. |
-| **HUD** | Dunkle Command-Center-Oberfläche im Browser (eine HTML-Datei, kein Internet): Chat mit Live-Denk-Spur, Gedächtnis, Lektionen, Projekte, Datenzentrum, Missionen, Automationen, Modell-Hub. |
-| **CLI** | Vollständige Kommandozeile mit deutschem Chat (`/befehle`), `doctor`, Datensatz-Export, Eval, Training, Modell-Hub. |
+| **Geräte & Sensoren** | Erkennt echte USB- und serielle Geräte (Flugsteuerungen, Mikrocontroller, GNSS-Empfänger, USB-Seriell-Wandler) über Betriebssystem-Quellen, merkt sich einen Verlauf, liest serielle Telemetrie (NMEA/GPS, Key=Value, JSON). Ohne Hardware: leere Liste, nichts Erfundenes. |
+| **System & Performance** | Echte Messwerte: CPU-Last, RAM, Platte, NVIDIA-GPU/VRAM/Temperatur, geladene Modelle, eigener Prozess – mit Modellempfehlung nach VRAM und Live-Verlauf im HUD. |
+| **3D-Modellierung** | Parametrische, wasserdichte Bauteile (Quader, Zylinder, Rohr, Kegel, Kugel, Lochplatte, Drohnenrahmen), STL/OBJ-Import/-Export, Volumen/Fläche/Masse/Schwerpunkt/Trägheit, Versionen je Projekt, 3D-Vorschau im HUD (eigener Renderer, keine Bibliothek). |
+| **Simulation** | Zeitschritt-Modelle: Schwebeflug (LiPo-Kennlinie, Innenwiderstand, Peukert, Nutzlast), Steigflug mit Regler, Fall mit Luftwiderstand (RK4), Thermik (Ein-Knoten), PID-Sprungantwort, Akku-Entladung, Balken-Parameterstudie – mit Diagramm, Kennzahlen, Warnungen und Annahmen. |
+| **Welt & Karten** | Offline-Geodäsie: Entfernung/Kurs (Haversine), Flugplan mit Wind je Abschnitt, Sonnenauf-/-untergang und Sonnenstand (NOAA), Tag-Nacht-Grenze, UTM, Orte und Routen je Projekt; Karte mit Gradnetz im HUD. Wetter und Kartenkacheln (Open-Meteo, OpenStreetMap) **nur** mit `online: true`. |
+| **HUD** | Dunkle Command-Center-Oberfläche (eine HTML-Datei, kein CDN): Chat mit Live-Denk-Spur, Gedächtnis, Lektionen, Projekte, Datenzentrum, Missionen, Automationen, Modell-Hub, System, Geräte, 3D-Modellierung, Simulation, Weltkarte. |
+| **App** | `python -m obito app` bzw. `OBITO.bat`: Server im Hintergrund + HUD als eigenes Fenster (Edge/Chrome-App-Modus oder pywebview); `build_exe.bat` baut `dist/OBITO/OBITO.exe`. |
+| **CLI** | Vollständige Kommandozeile mit deutschem Chat (`/befehle`), `doctor`, Datensatz-Export, Eval, Training, Modell-Hub, Geräte, 3D, Simulation, Geo. |
 
-Alles in reinem Python (Standardbibliothek). Nur fürs LoRA-Training sind torch/transformers/peft nötig.
+Alles in reinem Python (Standardbibliothek). Optional: `pypdf` (PDF), `pyserial` (serielle Telemetrie unter Windows), `pywebview` (eigenes Fenster), `pyinstaller` (EXE); nur fürs LoRA-Training sind torch/transformers/peft nötig.
 
 ---
 
@@ -86,6 +92,8 @@ Linux/macOS: `./start_obito.sh` oder dieselben `python -m obito …`-Befehle.
 ---
 
 ## Schnellstart
+
+`python -m obito app` startet Server und HUD-Fenster zusammen (das macht auch `OBITO.bat`); `serve` startet nur den Server für den Browser.
 
 ```text
 $ python -m obito --projekt "Drohne"
@@ -194,6 +202,27 @@ Der Server lauscht nur auf 127.0.0.1, prüft Host/Origin und erlaubt gefährlich
 **Backup/Pflege:** `/backup` sichert alle Datenbanken nach `~/.obito/backups/<zeit>/`; `/konsolidieren` verdichtet
 alte, unsichere KI-Erinnerungen und lange Sitzungen.
 
+**System:** `python -m obito system` (oder HUD-Tab **System**, Chat `/system`) zeigt CPU, RAM, Platte, GPU/VRAM,
+geladene Modelle und Empfehlungen – alles gemessen, nicht geschätzt (keine GPU → „keine", nicht „0 %").
+
+**Geräte:** `python -m obito geraete scan` erkennt angeschlossene Geräte (Windows: PnP/Registry, Linux: sysfs,
+macOS: system_profiler) und ordnet Rollen zu (Flugsteuerung, Mikrocontroller, GNSS, USB-Seriell …);
+`geraete lesen COM3 --baud 115200 --sekunden 3` liest Telemetrie und erkennt NMEA-Sätze (Position, Höhe,
+Geschwindigkeit, Satelliten), Key=Value- und JSON-Zeilen. Unter Windows braucht das Lesen `pip install pyserial`.
+
+**3D-Modellierung:** `python -m obito modell3d neu lochplatte l=100 b=50 t=3 "holes=-30/0/10;30/0/10" --material alu6061`
+erzeugt ein wasserdichtes Netz samt Volumen, Masse und Schwerpunkt; `modell3d export 1 platte.stl`, `modell3d import teil.stl`.
+Die KI nutzt dieselben Werkzeuge (`modell_erzeugen`, `modell_info`), wenn du sie nach einem Bauteil fragst.
+Im HUD: Primitiv wählen, Parameter eintragen, Vorschau drehen/zoomen, STL herunterladen, Versionen je Projekt.
+
+**Simulation:** `python -m obito simulation schwebeflug mass_g=1200 cells=4 mah=1500 hover_current_a=15 --csv flug.csv`;
+ohne Argumente erscheint die Liste aller Arten mit Parametern. Jedes Ergebnis nennt Annahmen und Warnungen.
+
+**Welt & Karten:** `python -m obito geo ort Feld "49.9576, 6.9294"`, `geo distanz Feld "50.1, 7.0"`,
+`geo plan "Feld; 49.96, 6.94" --geschwindigkeit 12 --wind 20 --wind-aus 270`, `geo sonne Feld --zeit 2026-06-21`,
+`geo utm Feld`, `geo wetter Feld` (nur mit `online: true`, Daten von Open-Meteo). Im HUD: Karte mit Gradnetz,
+Tag-Nacht-Grenze, Orten, Routen und Flugplan; Klick setzt Wegpunkte.
+
 ---
 
 ## Kommandozeile
@@ -215,6 +244,12 @@ projekt         list | neu | info | notiz | aufgabe | entscheidung | version | p
 mission         neu | list | status | start | stop | loeschen
 automation      list | neu | aktiv | inaktiv | jetzt | laeufe | log | loeschen | vorschlaege
 rechner         liste | material NAME | vergleich A,B | <rechner> schluessel=wert …
+app             Server + HUD-Fenster in einem Prozess   --breite --hoehe --browser --ohne-fenster --ohne-webview
+system          Messwerte und Empfehlungen             --json
+geraete         scan | list | lesen PORT | notiz | vergessen
+modell3d        arten | neu ART k=v … | import | list | info | export | loeschen
+simulation      [ART k=v …]                            --json --csv PFAD
+geo             distanz | plan | sonne | utm | ort | orte | route | routen | loeschen | wetter
 config          --schreiben PFAD --empfehlen VRAM_GB
 ```
 
@@ -236,10 +271,13 @@ config          --schreiben PFAD --empfehlen VRAM_GB
 | `allow_tools`, `confirm_dangerous`, `workspace` | Werkzeuge, Rückfrage bei gefährlichen, Sandbox-Verzeichnis |
 | `auto_memory`, `max_new_memories` | automatisches Merken |
 | `max_tokens_*` | Ausgabebudget je Stufe |
+| `online` | `false` (Standard): kein Internet. `true` erlaubt Wetter (Open-Meteo) und Kartenkacheln (OpenStreetMap) |
+| `serial_baud` | Standard-Baudrate beim Lesen serieller Geräte (115200) |
 | `data_dir` | Speicherort aller Datenbanken (Standard `~/.obito`) |
 
 Alle Daten liegen in `data_dir`: `gedaechtnis.db`, `lernen.db`, `wissen.db`, `projekte.db`, `missionen.db`,
-`automationen.db`, `datensaetze/`, `modelle/`, `backups/`, `logs/`.
+`automationen.db`, `geraete.db`, `modelle3d.db` + `modelle3d/` (STL), `geo.db`, `datensaetze/`, `modelle/`,
+`backups/`, `logs/`, `fenster/` (Browserprofil des App-Fensters).
 
 ---
 
@@ -260,6 +298,11 @@ Alle Antworten `{"ok": true, …}` bzw. `{"ok": false, "fehler": "…"}`; POST/D
 | `GET/POST /api/missionen`, `GET/DELETE /api/missionen/<id>`, `POST /api/missionen/<id>/start|stop` | Missionen |
 | `GET/POST /api/automationen`, `POST /api/automationen/<id>/jetzt|aktiv`, `GET /api/automationen/<id>/laeufe`, `DELETE …`, `GET/POST /api/automationen/vorschlaege` | Automationen |
 | `POST /api/pflege/konsolidieren`, `POST /api/pflege/backup` | Pflege |
+| `GET /api/system`, `GET /api/system/verlauf` | Messwerte, Empfehlungen, Verlauf |
+| `GET /api/geraete`, `POST /api/geraete/scan`, `POST /api/geraete/lesen` `{port, baud?, sekunden?}`, `POST /api/geraete/notiz`, `DELETE /api/geraete/<key>` | Geräte |
+| `GET /api/modelle3d/arten`, `GET/POST /api/modelle3d` `{art, parameter, name?, projekt?, material?}` oder `{pfad}`, `GET /api/modelle3d/<id>`, `GET …/<id>/mesh`, `GET …/<id>/stl`, `DELETE …/<id>` | 3D-Modelle |
+| `GET /api/simulation/arten`, `POST /api/simulation` `{art, parameter}` | Simulation |
+| `GET/POST /api/geo/orte`, `DELETE /api/geo/orte/<id>`, `GET/POST /api/geo/routen`, `DELETE /api/geo/routen/<id>`, `POST /api/geo/plan`, `GET /api/geo/sonne?ort=|lat=&lon=`, `GET /api/geo/wetter` (403 wenn offline) | Welt |
 
 ---
 
@@ -279,14 +322,21 @@ obito/
   projects.py      Projektsystem
   missions.py      Missionen (Plan → Ausführung → Bericht)
   automation.py    Zeitplaner
+  devices.py       Geräte & Sensoren (USB/seriell, Telemetrie, Verlauf)
+  sysmon.py        System & Performance (Messwerte, Empfehlungen, Verlauf)
+  geometry.py      3D-Modellierung (Primitive, STL/OBJ, Statistik, Modellspeicher)
+  simulation.py    Zeitschritt-Simulationen
+  geo.py           Welt & Karten (Geodäsie, Sonne, UTM, Orte/Routen, Wetter online)
+  desktop.py       App-Fenster (Server + Browser-App-Modus / pywebview)
   training/        modelfile.py (Ollama), evaluate.py (Eval + A/B), train_lora.py (LoRA/QLoRA/DPO)
   server.py        HTTP-API + SSE, gehärtet
   static/index.html  HUD (eine Datei)
   cli.py, cli_extra.py, __main__.py   Kommandozeile
-tests/             unittest, ~830 Tests ohne Modell (FakeBackend), < 30 s
-docs/              ARCHITEKTUR.md, ARCHITEKTUR_PHASE2.md (verbindliche Spezifikationen)
+packaging/         obito.spec, obito_app.py (PyInstaller → dist/OBITO/OBITO.exe)
+tests/             unittest, ~1000 Tests ohne Modell und ohne Hardware (FakeBackend, gepatchte Quellen), < 40 s
+docs/              ARCHITEKTUR.md, ARCHITEKTUR_PHASE2.md, ARCHITEKTUR_PHASE3.md (verbindliche Spezifikationen)
 beispiele/         eval_fragen.jsonl (10 Ingenieur-Fragen mit Stichworten)
-OBITO.bat, start_obito.sh, pyproject.toml, obito.example.json
+OBITO.bat, start_obito.sh, build_exe.bat, pyproject.toml, obito.example.json
 ```
 
 Tests: `python -m unittest discover -s tests`.
@@ -307,9 +357,9 @@ Tests: `python -m unittest discover -s tests`.
 
 ## Fahrplan
 
-- Native Windows-App (Tauri/WebView2) um dasselbe HUD, Tray-Icon, Autostart
-- Geräteerkennung (serielle Ports, USB) und Telemetrie-Anbindung (MAVLink/DJI SDK)
-- 3D-Vorschau (STL/STEP) und Druckvorlagen im Projektsystem
+- MAVLink-/DJI-SDK-Telemetrie (binäre Protokolle) über die bestehende Geräteerkennung
+- Boolesche Operationen und STEP-Export in der 3D-Modellierung; Druckvorlagen im Projektsystem
+- Tray-Icon und Autostart für die App; signierte EXE
 - Vision-Modelle (Bilder von Platinen/Bauteilen erkennen) über Ollama-Multimodal
 
 Lizenz: MIT.

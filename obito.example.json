@@ -21,6 +21,8 @@
   "confirm_dangerous": true,
   "auto_memory": true,
   "workspace": ".",
+  "online": false,
+  "serial_baud": 115200,
 
   "server_host": "127.0.0.1",
   "server_port": 8765
