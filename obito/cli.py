@@ -1660,6 +1660,24 @@ def cmd_serve(cfg: Config, args: argparse.Namespace, out: TextIO, backend: LLMBa
         brain.close()
 
 
+def cmd_app(cfg: Config, args: argparse.Namespace, out: TextIO, backend: LLMBackend | None = None) -> int:
+    """``python -m obito app`` – Server + App-Fenster in einem Prozess (siehe :mod:`obito.desktop`)."""
+    from . import desktop
+
+    if args.host:
+        cfg.server_host = args.host
+    if args.port is not None:
+        cfg.server_port = int(args.port)
+    kwargs: dict = {}
+    if args.breite is not None:
+        kwargs["width"] = int(args.breite)
+    if args.hoehe is not None:
+        kwargs["height"] = int(args.hoehe)
+    return desktop.run_app(cfg, backend=backend, allow_dangerous=bool(args.gefaehrlich_erlauben),
+                           use_webview=not args.ohne_webview, open_browser=not args.ohne_fenster,
+                           browser=args.browser, out=out, **kwargs)
+
+
 def cmd_chat(cfg: Config, args: argparse.Namespace, out: TextIO, inp: Callable[[str], str],
              backend: LLMBackend | None = None) -> int:
     brain = Brain(cfg, backend=backend)
@@ -1747,6 +1765,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("serve", "HTTP-Server mit HUD-Oberfläche starten.")
     p.add_argument("--host", default=None, help="Adresse (Standard: server_host, 127.0.0.1)")
     p.add_argument("--port", default=None, type=int, help="Port (Standard: server_port, 8765)")
+    p.add_argument("--gefaehrlich-erlauben", action="store_true",
+                   help="gefährliche Werkzeuge (Dateien schreiben, Code/Befehle ausführen) ohne Rückfrage erlauben")
+
+    p = add("app", "OBITO als App starten: Server im Hintergrund und HUD als eigenes Fenster (Edge/Chrome-App-Modus).")
+    p.add_argument("--host", default=None, help="Adresse (Standard: server_host, 127.0.0.1)")
+    p.add_argument("--port", default=None, type=int, help="Port (Standard: server_port, 8765)")
+    p.add_argument("--breite", default=None, type=int, metavar="PX", help="Fensterbreite (Standard: 1600)")
+    p.add_argument("--hoehe", default=None, type=int, metavar="PX", help="Fensterhöhe (Standard: 950)")
+    p.add_argument("--browser", default=None, metavar="PFAD", help="Pfad zu Edge/Chrome/Chromium erzwingen")
+    p.add_argument("--ohne-fenster", action="store_true", help="nur den Server starten (kein Fenster)")
+    p.add_argument("--ohne-webview", action="store_true", help="pywebview nicht nutzen, auch wenn installiert")
     p.add_argument("--gefaehrlich-erlauben", action="store_true",
                    help="gefährliche Werkzeuge (Dateien schreiben, Code/Befehle ausführen) ohne Rückfrage erlauben")
 
@@ -1862,6 +1891,8 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None, inp: C
             return doctor(cfg, training=bool(args.training), out=out, backend=backend)
         if cmd == "serve":
             return cmd_serve(cfg, args, out, backend=backend)
+        if cmd == "app":
+            return cmd_app(cfg, args, out, backend=backend)
         if cmd == "export-dataset":
             return cmd_export_dataset(cfg, args, out)
         if cmd == "eval":

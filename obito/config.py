@@ -64,6 +64,8 @@ class Config:
     auto_memory: bool = True
     language: str = "de"
     workspace: str = "."               # Verzeichnis, auf das Datei-Werkzeuge zugreifen dürfen
+    online: bool = False               # Internet nur für optionale Funktionen (Wetter) – Standard aus
+    serial_baud: int = 115200          # Standard-Baudrate für serielle Geräte (Telemetrie)
 
     # Lokaler API-Server (für die HUD-Oberfläche)
     server_host: str = "127.0.0.1"
@@ -99,6 +101,26 @@ class Config:
         return self.data_path / "automationen.db"
 
     @property
+    def devices_db(self) -> Path:
+        return self.data_path / "geraete.db"
+
+    @property
+    def models3d_db(self) -> Path:
+        return self.data_path / "modelle3d.db"
+
+    @property
+    def models3d_dir(self) -> Path:
+        return self.data_path / "modelle3d"
+
+    @property
+    def geo_db(self) -> Path:
+        return self.data_path / "geo.db"
+
+    @property
+    def window_dir(self) -> Path:
+        return self.data_path / "fenster"
+
+    @property
     def backups_dir(self) -> Path:
         return self.data_path / "backups"
 
@@ -119,7 +141,8 @@ class Config:
         return self.fast_model or self.model
 
     def ensure_dirs(self) -> None:
-        for p in (self.data_path, self.datasets_dir, self.models_dir, self.logs_dir, self.backups_dir):
+        for p in (self.data_path, self.datasets_dir, self.models_dir, self.logs_dir, self.backups_dir,
+                  self.models3d_dir):
             p.mkdir(parents=True, exist_ok=True)
 
     def to_dict(self) -> dict:
