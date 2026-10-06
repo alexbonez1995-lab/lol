@@ -127,6 +127,10 @@ class LiveSourcesTest(unittest.TestCase):
             with open(f"{tmp}/a.bin", "wb") as f:
                 f.write(b"x" * 1000)
             self.assertEqual(sysmon.dir_size(tmp), 1000)
+            with open(f"{tmp}/b.bin", "wb") as f:
+                f.write(b"y" * 500)
+            self.assertEqual(sysmon.dir_size(tmp), 1000)                 # 30 s zwischengespeichert
+            self.assertEqual(sysmon.dir_size(tmp, cache=False), 1500)
             self.assertIsNone(sysmon.dir_size(None))
             self.assertIsNone(sysmon.dir_size(f"{tmp}/fehlt"))
 

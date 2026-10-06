@@ -315,6 +315,21 @@ class ReadSerialTest(unittest.TestCase):
             devices._open_serial = orig
 
 
+    @unittest.skipUnless(os.name == "posix", "nur POSIX")
+    def test_regular_file_is_not_a_serial_port(self):
+        try:
+            import serial  # noqa: F401
+            self.skipTest("pyserial installiert – POSIX-Pfad nicht aktiv")
+        except ImportError:
+            pass
+        with tempfile.NamedTemporaryFile() as fh:
+            with self.assertRaises(ValueError) as ctx:
+                devices.read_serial(fh.name, seconds=0.1)
+        self.assertIn("kein serielles Gerät", str(ctx.exception))
+        with self.assertRaises(ValueError):
+            devices.read_serial("/dev/gibt/es/nicht", seconds=0.1)
+
+
 class DeviceStoreTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

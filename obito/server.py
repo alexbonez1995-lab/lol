@@ -1182,7 +1182,7 @@ class ObitoHandler(BaseHTTPRequestHandler):
             raise _HttpError(400, "Feld »sekunden« muss eine Zahl sein")
         try:
             result = devmod.read_serial(port, baud=self.server.brain.cfg.serial_baud if baud is None else baud,
-                                       seconds=float(sekunden))
+                                       seconds=float(str(sekunden).replace(",", ".")))
         except ValueError as e:
             raise _HttpError(400, str(e)) from None
         parsed = devmod.parse_telemetry(result["text"])

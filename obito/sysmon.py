@@ -594,16 +594,28 @@ def process() -> dict:
     }
 
 
-def dir_size(path: str | None, limit: int = MAX_DIR_FILES) -> int | None:
-    """Rekursive Größe eines Verzeichnisses in Bytes (Symlinks nicht gefolgt), höchstens ``limit`` Dateien."""
+_DIR_CACHE: dict[str, tuple[float, int | None]] = {}
+DIR_CACHE_TTL_S = 30.0
+
+
+def dir_size(path: str | None, limit: int = MAX_DIR_FILES, *, cache: bool = True) -> int | None:
+    """Rekursive Größe eines Verzeichnisses in Bytes (Symlinks nicht gefolgt), höchstens ``limit`` Dateien.
+    Das Ergebnis wird 30 s zwischengespeichert, damit der Live-Verlauf im HUD die Platte nicht dauernd durchsucht."""
     if not path or not os.path.isdir(path):
         return None
+    key = os.path.abspath(path)
+    now = time.monotonic()
+    if cache:
+        hit = _DIR_CACHE.get(key)
+        if hit and now - hit[0] < DIR_CACHE_TTL_S:
+            return hit[1]
     total = 0
     count = 0
     for root, dirs, files in os.walk(path, followlinks=False, onerror=lambda e: None):
         for name in files:
             if count >= limit:
                 log.debug("Größenermittlung nach %d Dateien abgebrochen: %s", limit, path)
+                _DIR_CACHE[key] = (now, total)
                 return total
             count += 1
             try:
@@ -611,6 +623,7 @@ def dir_size(path: str | None, limit: int = MAX_DIR_FILES) -> int | None:
             except OSError:
                 continue
             total += st.st_size
+    _DIR_CACHE[key] = (now, total)
     return total
 
 

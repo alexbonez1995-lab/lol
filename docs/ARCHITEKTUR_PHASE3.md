@@ -1,7 +1,7 @@
 # OBITO – Architektur Phase 3 (Geräte, System, 3D, Simulation, Welt, Desktop)
 
 Ergänzt `docs/ARCHITEKTUR.md` (Phase 1: KI-Kern) und `docs/ARCHITEKTUR_PHASE2.md` (Phase 2:
-Engineering-Plattform). Beide Phasen sind implementiert und getestet (791 Tests). Phase 3 setzt
+Engineering-Plattform). Beide Phasen sind implementiert und getestet (791 Tests); Phase 3 ist umgesetzt (≈ 1000 Tests gesamt). Phase 3 setzt
 die restlichen Bereiche der OBITO-Konzeptbilder um:
 
 | Modul | Konzeptbereich |
@@ -242,7 +242,9 @@ Dazu `packaging/obito.spec` (PyInstaller, onedir, static/ und beispiele/ eingebu
   `POST /api/geo/routen`, `DELETE /api/geo/routen/<id>`, `POST /api/geo/plan`, `GET /api/geo/sonne`,
   `GET /api/geo/wetter` (403 wenn offline).
 - CLI: `python -m obito system|geraete|modell3d|simulation|geo|app`; Chat-Befehle `/system`,
-  `/geraete`, `/modell`, `/simulation`, `/geo`.
+  `/geraete`, `/modell3d`, `/simulation`, `/geo`.
+- Zusätzlich umgesetzt: `POST /api/geraete/notiz`; `GET /api/status` liefert `kacheln_url` und die CSP erlaubt
+  `img-src tile.openstreetmap.org` nur bei `online = true`; `packaging/obito.spec` + `build_exe.bat` (PyInstaller).
 - HUD-Tabs: **System** (Live-Verlauf CPU/RAM/GPU, Modelle geladen, Empfehlungen), **Geräte**
   (Scan, Verlauf, seriell lesen), **3D-Modellierung** (Primitiv wählen → Parameter → Vorschau in
   einem eigenen WebGL/Canvas-Renderer mit Orbit, Statistik, STL-Download, Versionen), **Simulation**

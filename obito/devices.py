@@ -29,6 +29,7 @@ import os
 import platform
 import re
 import sqlite3
+import stat
 import subprocess
 import threading
 import time
@@ -864,12 +865,20 @@ def _open_serial(port: str, baud: int):
     if os.name != "posix":
         raise ValueError("Serielles Lesen unter Windows braucht pyserial: »pip install pyserial«.")
     try:
-        return _PosixSerial(port, baud)
+        st = os.stat(port)
     except FileNotFoundError:
         raise ValueError(f"Port »{_short(port, 80)}« existiert nicht.") from None
+    except OSError as e:
+        raise ValueError(f"Port »{_short(port, 80)}« ist nicht zugänglich: {_short(e, 200)}") from None
+    if not stat.S_ISCHR(st.st_mode):
+        raise ValueError(f"»{_short(port, 80)}« ist kein serielles Gerät (kein Zeichengerät).")
+    try:
+        return _PosixSerial(port, baud)
+    except ValueError:
+        raise
     except PermissionError:
         raise ValueError(f"Keine Berechtigung für Port »{_short(port, 80)}« (Gruppe dialout?).") from None
-    except OSError as e:
+    except Exception as e:  # noqa: BLE001 – auch termios.error
         raise ValueError(f"Port »{_short(port, 80)}« konnte nicht geöffnet werden: {_short(e, 200)}") from e
 
 
