@@ -117,6 +117,14 @@ class Config:
         return self.data_path / "geo.db"
 
     @property
+    def studio_db(self) -> Path:
+        return self.data_path / "studio.db"
+
+    @property
+    def studio_dir(self) -> Path:
+        return self.data_path / "studio"
+
+    @property
     def window_dir(self) -> Path:
         return self.data_path / "fenster"
 

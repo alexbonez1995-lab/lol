@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OBITO Studio</title>
+<style>
+:root {
+  --bg: #070b16;
+  --panel: rgba(12, 18, 34, 0.94);
+  --line: #24324f;
+  --text: #e6edf7;
+  --muted: #93a4bf;
+  --cyan: #4fd1ff;
+  --ok: #38e8a0;
+  --warn: #ffc857;
+  --bad: #ff5e7a;
+  --sans: system-ui, "Segoe UI", Roboto, Ubuntu, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); }
+canvas { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; touch-action: none; }
+button { font: inherit; cursor: pointer; }
+
+.topbar { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+.topbar > * { pointer-events: auto; }
+.pill { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px; font-size: 13px; color: var(--text); text-decoration: none; display: inline-flex; gap: 6px; align-items: center; }
+.pill b { color: var(--cyan); }
+.pill.btn:hover { border-color: var(--cyan); }
+.spacer { flex: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+
+.hint { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.hint kbd { font-family: var(--mono); background: #1b2540; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--text); }
+.action { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: var(--cyan); color: #04121c; border: 0; border-radius: 999px; padding: 10px 18px; font-weight: 700; box-shadow: 0 6px 24px rgba(79, 209, 255, .35); }
+[hidden] { display: none !important; }
+
+.modal { position: fixed; inset: 0; background: rgba(3, 6, 14, .6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.card h2 { margin: 0; font-size: 20px; }
+.card .rolle { color: var(--muted); font-size: 13px; }
+.who { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.avatar { width: 46px; height: 46px; border-radius: 12px; flex: none; position: relative; }
+.avatar::after { content: ""; position: absolute; left: 13px; top: 10px; width: 20px; height: 16px; background: #f1c9a5; border-radius: 4px; }
+.bubble-text { background: #121a2e; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; }
+textarea { width: 100%; min-height: 90px; resize: vertical; background: #0b1222; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font: inherit; }
+textarea:focus { outline: 2px solid var(--cyan); border-color: transparent; }
+.row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.primary { background: var(--cyan); color: #04121c; border: 0; border-radius: 9px; padding: 9px 16px; font-weight: 700; }
+.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 9px; padding: 8px 14px; }
+.ghost:hover { border-color: var(--cyan); }
+.ideen { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.idee { background: #121a2e; border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+.idee:hover { color: var(--text); border-color: var(--cyan); }
+
+.panel { position: fixed; top: 56px; right: 10px; bottom: 10px; width: min(360px, calc(100vw - 20px)); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; }
+.panel header { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.panel header h3 { margin: 0; font-size: 15px; flex: 1; }
+.liste { overflow: auto; padding: 8px; flex: 1; }
+.job { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; background: #0e1527; }
+.job .kopf { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.job .text { margin: 6px 0; font-size: 14px; overflow-wrap: anywhere; }
+.job .meldung { font-size: 12px; color: var(--muted); }
+.tag { border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; color: #06101c; }
+.st-wartend { background: var(--muted); } .st-arbeitet { background: var(--warn); } .st-fertig { background: var(--ok); } .st-fehler { background: var(--bad); }
+.leer { color: var(--muted); font-size: 13px; padding: 12px; text-align: center; }
+.mini { background: transparent; border: 1px solid var(--line); color: var(--text); border-radius: 7px; padding: 3px 9px; font-size: 12px; }
+.mini:hover { border-color: var(--cyan); }
+
+.viewer { position: fixed; inset: 0; background: rgba(3, 6, 14, .82); display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+.viewer .leiste { display: flex; gap: 8px; align-items: center; }
+.viewer .leiste .titel { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viewer iframe { flex: 1; width: 100%; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+
+.toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--ok); color: var(--text); border-radius: 10px; padding: 9px 14px; font-size: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+.banner { position: fixed; top: 56px; left: 10px; background: #3a1220; border: 1px solid var(--bad); color: #ffd6de; border-radius: 10px; padding: 8px 12px; font-size: 13px; max-width: calc(100vw - 20px); }
+
+@media (max-width: 640px) {
+  .hint { display: none; }
+  .pill .lang, .topbar .studio-pill { display: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="welt" aria-label="Spielwelt mit KI-Figuren"></canvas>
+
+<div class="topbar">
+  <a class="pill btn" href="/" title="Zurück zum HUD">◈ <span class="lang">OBITO</span> HUD</a>
+  <span class="pill studio-pill"><b>Studio</b> <span class="lang">· KI-Figuren bauen für dich</span></span>
+  <span class="spacer"></span>
+  <span class="pill" id="modell"><span class="dot" id="modell-dot"></span><span id="modell-text">verbinde …</span></span>
+  <button class="pill btn" id="btn-liste" type="button">Aufträge <b id="zahl">0</b></button>
+</div>
+
+<div class="banner" id="banner" hidden></div>
+<div class="hint"><kbd>WASD</kbd>/<kbd>Pfeile</kbd> laufen · Klick = hinlaufen · <kbd>E</kbd> sprechen/öffnen · <kbd>Q</kbd> Aufträge · <kbd>Esc</kbd> schließen</div>
+<button class="action" id="action" type="button" hidden></button>
+<div class="toast" id="toast" hidden></div>
+
+<div class="modal" id="dialog" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="d-name">
+    <div class="who">
+      <div class="avatar" id="d-avatar"></div>
+      <div><h2 id="d-name"></h2><div class="rolle" id="d-rolle"></div></div>
+    </div>
+    <p class="bubble-text" id="d-gruss"></p>
+    <label for="d-text" class="rolle">Dein Auftrag</label>
+    <textarea id="d-text" maxlength="2000" placeholder="z. B. Baue eine Webseite für meinen Döner-Laden mit Speisekarte"></textarea>
+    <div class="ideen" id="d-ideen"></div>
+    <div class="row">
+      <button class="primary" id="d-senden" type="button">Auftrag geben</button>
+      <button class="ghost" id="d-zu" type="button">Tschüss</button>
+    </div>
+    <div class="liste" id="d-jobs" style="padding:8px 0 0"></div>
+  </div>
+</div>
+
+<aside class="panel" id="panel" hidden>
+  <header><h3>Aufträge</h3><button class="mini" id="panel-zu" type="button">✕</button></header>
+  <div class="liste" id="liste"></div>
+</aside>
+
+<div class="viewer" id="viewer" hidden>
+  <div class="leiste">
+    <span class="titel" id="v-titel"></span>
+    <a class="pill btn" id="v-tab" target="_blank" rel="noopener">Neuer Tab ↗</a>
+    <button class="pill btn" id="v-zu" type="button">Schließen ✕</button>
+  </div>
+  <iframe id="v-frame" title="Ergebnis" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+</div>
+
+<script>
+"use strict";
+// ================================================================ Karte
+const COLS = 40, ROWS = 26, TS = 32;
+const ZONEN = {
+  web:  { name: "Web-Studio",    x0: 1,  y0: 1,  x1: 12, y1: 9,  farbe: "#ff6fb5", boden: ["#2a1b2b", "#2f1f31"], tuer: [13, 6] },
+  app:  { name: "App-Werkstatt", x0: 27, y0: 1,  x1: 38, y1: 9,  farbe: "#4fd1ff", boden: ["#14243a", "#172a42"], tuer: [26, 6] },
+  plan: { name: "Planungsraum",  x0: 1,  y0: 16, x1: 12, y1: 24, farbe: "#ffd166", boden: ["#2b2616", "#312b19"], tuer: [13, 19] },
+  pc:   { name: "PC-Zentrale",   x0: 27, y0: 16, x1: 38, y1: 24, farbe: "#7dff8a", boden: ["#14291b", "#18301f"], tuer: [26, 19] },
+};
+// Arbeitsplatz je Figur: Schreibtisch-Kachel + Sitzplatz davor
+const PULTE = { web: [4, 3], app: [33, 3], plan: [4, 18], pc: [33, 18] };
+// Galerie-Rahmen an der Nordwand des Platzes
+const RAHMEN = [14, 16, 18, 21, 23, 25].map(x => ({ x, y: 1 }));
+
+const grid = [];      // 0 Boden, 1 Wand, 2 Pult, 3 Pflanze, 4 Brunnen, 5 Galerie-Rahmen
+for (let y = 0; y < ROWS; y++) { grid.push(new Array(COLS).fill(0)); }
+function setT(x, y, v) { if (x >= 0 && y >= 0 && x < COLS && y < ROWS) grid[y][x] = v; }
+for (let x = 0; x < COLS; x++) { setT(x, 0, 1); setT(x, ROWS - 1, 1); }
+for (let y = 0; y < ROWS; y++) { setT(0, y, 1); setT(COLS - 1, y, 1); }
+for (const z of Object.values(ZONEN)) {
+  for (let x = z.x0 - 1; x <= z.x1 + 1; x++) { setT(x, z.y0 - 1, 1); setT(x, z.y1 + 1, 1); }
+  for (let y = z.y0 - 1; y <= z.y1 + 1; y++) { setT(z.x0 - 1, y, 1); setT(z.x1 + 1, y, 1); }
+  setT(z.tuer[0], z.tuer[1], 0); setT(z.tuer[0], z.tuer[1] + 1, 0);
+}
+for (const [zid, [x, y]] of Object.entries(PULTE)) { setT(x, y, 2); setT(x + 1, y, 2); }
+[[2, 8], [11, 2], [37, 8], [28, 2], [2, 23], [11, 17], [37, 23], [28, 17], [14, 12], [25, 12], [14, 23], [25, 23]].forEach(([x, y]) => setT(x, y, 3));
+for (let y = 12; y <= 13; y++) for (let x = 19; x <= 20; x++) setT(x, y, 4);
+RAHMEN.forEach(r => setT(r.x, r.y, 5));
+
+function frei(x, y) { return x >= 0 && y >= 0 && x < COLS && y < ROWS && grid[y][x] === 0; }
+function zoneVon(x, y) {
+  for (const [id, z] of Object.entries(ZONEN)) if (x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1) return id;
+  return null;
+}
+
+function wegfinden(sx, sy, zx, zy) {
+  sx = Math.round(sx); sy = Math.round(sy);
+  if (!frei(zx, zy)) {                       // Ziel blockiert: nächstes freies Nachbarfeld
+    const n = [[0, 1], [1, 0], [-1, 0], [0, -1], [1, 1], [-1, 1]].map(([dx, dy]) => [zx + dx, zy + dy]).find(([x, y]) => frei(x, y));
+    if (!n) return [];
+    [zx, zy] = n;
+  }
+  const key = (x, y) => y * COLS + x, prev = new Map([[key(sx, sy), -1]]), q = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.shift();
+    if (x === zx && y === zy) break;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, k = key(nx, ny);
+      if (frei(nx, ny) && !prev.has(k)) { prev.set(k, key(x, y)); q.push([nx, ny]); }
+    }
+  }
+  if (!prev.has(key(zx, zy))) return [];
+  const pfad = [];
+  for (let k = key(zx, zy); k !== -1 && k !== key(sx, sy); k = prev.get(k)) pfad.unshift([k % COLS, Math.floor(k / COLS)]);
+  return pfad;
+}
+
+// ================================================================ Figuren
+const spieler = { name: "DU", farbe: "#e6edf7", x: 19.5, y: 16, pfad: [], dir: 1, laufen: 0, tempo: 5 };
+const npcs = {};      // id -> Figur mit Spielzustand
+let figurDaten = [], auftraege = [], galerie = [];
+
+function npcAnlegen(f) {
+  const z = ZONEN[f.zone];
+  return { ...f, x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 + 1, pfad: [], dir: 1, laufen: 0, tempo: 3,
+           warte: Math.random() * 2, zustand: "frei", blase: null, blaseBis: 0, aufgabe: null };
+}
+
+function bewegen(e, dt) {
+  if (!e.pfad.length) { e.laufen = 0; return; }
+  const [tx, ty] = e.pfad[0];
+  const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy), s = e.tempo * dt;
+  if (Math.abs(dx) > 0.01) e.dir = dx > 0 ? 1 : -1;
+  if (d <= s) { e.x = tx; e.y = ty; e.pfad.shift(); } else { e.x += dx / d * s; e.y += dy / d * s; }
+  e.laufen += dt;
+}
+
+function npcDenken(n, dt, t) {
+  const pult = PULTE[n.zone];
+  if (n.zustand === "arbeitet" || n.zustand === "wartet") {
+    const sitz = [pult[0], pult[1] + 1];
+    if (!n.pfad.length && (Math.round(n.x) !== sitz[0] || Math.round(n.y) !== sitz[1])) n.pfad = wegfinden(n.x, n.y, ...sitz);
+    if (!n.pfad.length) n.dir = 1;
+    return;
+  }
+  n.warte -= dt;
+  if (n.warte <= 0 && !n.pfad.length) {
+    const z = ZONEN[n.zone];
+    // meist in der eigenen Zone, manchmal ein Abstecher auf den Platz
+    let x, y, ok = false;
+    for (let i = 0; i < 30 && !ok; i++) {
+      if (Math.random() < 0.18) { x = 14 + Math.floor(Math.random() * 12); y = 3 + Math.floor(Math.random() * 20); }
+      else { x = z.x0 + Math.floor(Math.random() * (z.x1 - z.x0 + 1)); y = z.y0 + Math.floor(Math.random() * (z.y1 - z.y0 + 1)); }
+      ok = frei(x, y);
+    }
+    if (ok) n.pfad = wegfinden(n.x, n.y, x, y).slice(0, 40);
+    n.warte = 2 + Math.random() * 4;
+  }
+}
+
+// ================================================================ Eingabe
+const tasten = new Set();
+let naheZiel = null;    // {art:"npc"|"rahmen", ref}
+
+addEventListener("keydown", e => {
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") {
+    if (e.key === "Escape") schliessen();
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) senden();
+    return;
+  }
+  const k = e.key.toLowerCase();
+  if (k === "escape") { schliessen(); return; }
+  if (offen()) return;
+  if (k === "e" || k === " " || k === "enter") { e.preventDefault(); interagieren(); return; }
+  if (k === "q") { panelUmschalten(); return; }
+  if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) { e.preventDefault(); tasten.add(k); spieler.pfad = []; }
+});
+addEventListener("keyup", e => tasten.delete(e.key.toLowerCase()));
+addEventListener("blur", () => tasten.clear());
+
+const canvas = document.getElementById("welt"), ctx = canvas.getContext("2d");
+let zoom = 1, camX = 0, camY = 0;
+
+canvas.addEventListener("pointerdown", e => {
+  if (offen()) return;
+  const wx = (e.clientX + camX) / (TS * zoom), wy = (e.clientY + camY) / (TS * zoom);
+  // Figur angeklickt? hinlaufen und ansprechen
+  for (const n of Object.values(npcs)) {
+    if (Math.abs(n.x + 0.5 - wx) < 0.7 && Math.abs(n.y + 0.2 - wy) < 0.9) {
+      spieler.pfad = wegfinden(spieler.x, spieler.y, Math.round(n.x), Math.round(n.y) + 1);
+      spieler.ansprechen = n.id;
+      return;
+    }
+  }
+  const tx = Math.floor(wx), ty = Math.floor(wy);
+  const r = RAHMEN.findIndex(r => r.x === tx && r.y === ty);
+  if (r >= 0 && galerie[r]) { spieler.pfad = wegfinden(spieler.x, spieler.y, tx, ty + 1); spieler.oeffnen = galerie[r].id; return; }
+  spieler.pfad = wegfinden(spieler.x, spieler.y, tx, ty);
+  spieler.ansprechen = null; spieler.oeffnen = null;
+});
+
+function spielerSteuern(dt) {
+  let vx = 0, vy = 0;
+  if (tasten.has("a") || tasten.has("arrowleft")) vx -= 1;
+  if (tasten.has("d") || tasten.has("arrowright")) vx += 1;
+  if (tasten.has("w") || tasten.has("arrowup")) vy -= 1;
+  if (tasten.has("s") || tasten.has("arrowdown")) vy += 1;
+  if (!vx && !vy) { bewegen(spieler, dt); return; }
+  const l = Math.hypot(vx, vy), s = spieler.tempo * dt;
+  const r = 0.3, passt = (x, y) => [[-r, -r], [r, -r], [-r, r], [r, r]].every(([ox, oy]) => frei(Math.round(x + ox), Math.round(y + oy)));
+  const nx = spieler.x + vx / l * s, ny = spieler.y + vy / l * s;
+  if (passt(nx, spieler.y)) spieler.x = nx;
+  if (passt(spieler.x, ny)) spieler.y = ny;
+  if (vx) spieler.dir = vx > 0 ? 1 : -1;
+  spieler.laufen += dt;
+}
+
+function naheSuchen() {
+  let best = null, bd = 1.8;
+  for (const n of Object.values(npcs)) {
+    const d = Math.hypot(n.x - spieler.x, n.y - spieler.y);
+    if (d < bd) { bd = d; best = { art: "npc", ref: n }; }
+  }
+  RAHMEN.forEach((r, i) => {
+    if (!galerie[i]) return;
+    const d = Math.hypot(r.x - spieler.x, r.y + 1 - spieler.y);
+    if (d < bd) { bd = d; best = { art: "rahmen", ref: galerie[i] }; }
+  });
+  naheZiel = best;
+  const btn = document.getElementById("action");
+  if (best && !offen()) {
+    btn.textContent = best.art === "npc" ? `E · mit ${best.ref.name} sprechen` : `E · „${kurz(best.ref.auftrag, 28)}“ ansehen`;
+    btn.hidden = false;
+  } else btn.hidden = true;
+}
+
+function interagieren() {
+  if (!naheZiel) return;
+  if (naheZiel.art === "npc") dialogOeffnen(naheZiel.ref);
+  else ansehen(naheZiel.ref);
+}
+document.getElementById("action").addEventListener("click", interagieren);
+
+// ================================================================ Oberfläche
+const $ = id => document.getElementById(id);
+const IDEEN = {
+  webseite: ["Webseite für meinen Imbiss mit Speisekarte", "Portfolio für einen Fotografen", "Landingpage für eine Gaming-App"],
+  app: ["To-do-App mit Kategorien", "Snake-Spiel", "Taschenrechner für Stromkosten"],
+  plan: ["Plan für eine eigene Spiele-App", "Wie starte ich einen YouTube-Kanal?", "Plan für einen Online-Shop"],
+  pc: ["Räume meinen Downloads-Ordner auf", "Installiere Python und VS Code", "Mache ein Backup von Dokumente"],
+};
+let dialogFigur = null;
+
+function offen() { return !$("dialog").hidden || !$("viewer").hidden; }
+function kurz(s, n) { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+function dialogOeffnen(n) {
+  dialogFigur = n;
+  tasten.clear();
+  $("d-avatar").style.background = n.farbe;
+  $("d-name").textContent = n.name;
+  $("d-rolle").textContent = n.rolle;
+  const meine = auftraege.filter(a => a.figur === n.id);
+  const laeuft = meine.find(a => a.status === "arbeitet");
+  $("d-gruss").textContent = laeuft ? `Ich arbeite gerade an „${kurz(laeuft.auftrag, 60)}“. Du kannst mir trotzdem schon den nächsten Auftrag geben.` : n.begruessung;
+  const ideen = $("d-ideen"); ideen.replaceChildren();
+  for (const t of IDEEN[n.art] || []) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "idee"; b.textContent = t;
+    b.onclick = () => { $("d-text").value = t; $("d-text").focus(); };
+    ideen.append(b);
+  }
+  renderJobs($("d-jobs"), meine.slice(0, 5), true);
+  $("d-text").value = "";
+  $("dialog").hidden = false;
+  $("action").hidden = true;
+  setTimeout(() => $("d-text").focus(), 30);
+}
+
+async function senden() {
+  const text = $("d-text").value.trim();
+  if (!text || !dialogFigur) return;
+  $("d-senden").disabled = true;
+  try {
+    const r = await api("/api/studio/auftraege", { method: "POST", body: JSON.stringify({ figur: dialogFigur.id, auftrag: text }) });
+    const n = npcs[dialogFigur.id];
+    n.zustand = "wartet"; n.pfad = []; sprechblase(n, "Alles klar, ich leg los!", 3);
+    auftraege.unshift(r.auftrag);
+    schliessen();
+    toast(`${dialogFigur.name} hat den Auftrag angenommen.`);
+    aktualisieren();
+  } catch (e) {
+    $("d-gruss").textContent = "Das hat nicht geklappt: " + e.message;
+  } finally { $("d-senden").disabled = false; }
+}
+$("d-senden").addEventListener("click", senden);
+$("d-zu").addEventListener("click", schliessen);
+$("dialog").addEventListener("pointerdown", e => { if (e.target === $("dialog")) schliessen(); });
+
+function schliessen() {
+  $("dialog").hidden = true;
+  if (!$("viewer").hidden) { $("viewer").hidden = true; $("v-frame").src = "about:blank"; }
+  dialogFigur = null;
+  canvas.focus?.();
+}
+
+function ansehen(a) {
+  if (!a.vorschau) return;
+  $("v-titel").textContent = `${(npcs[a.figur] || {}).name || a.figur}: ${a.auftrag}`;
+  $("v-frame").src = a.vorschau;
+  $("v-tab").href = a.vorschau;
+  $("viewer").hidden = false;
+  $("action").hidden = true;
+}
+$("v-zu").addEventListener("click", schliessen);
+
+function panelUmschalten() { $("panel").hidden = !$("panel").hidden; if (!$("panel").hidden) renderListe(); }
+$("btn-liste").addEventListener("click", panelUmschalten);
+$("panel-zu").addEventListener("click", panelUmschalten);
+
+function renderJobs(ziel, liste, kompakt) {
+  ziel.replaceChildren();
+  if (!liste.length) {
+    if (!kompakt) { const p = document.createElement("div"); p.className = "leer"; p.textContent = "Noch keine Aufträge. Lauf zu einer Figur und sprich sie an!"; ziel.append(p); }
+    return;
+  }
+  for (const a of liste) {
+    const n = npcs[a.figur] || { name: a.figur, farbe: "#888" };
+    const box = document.createElement("div"); box.className = "job";
+    const kopf = document.createElement("div"); kopf.className = "kopf";
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = n.farbe;
+    const name = document.createElement("span"); name.textContent = `${n.name} · #${a.id}`;
+    const sp = document.createElement("span"); sp.className = "spacer"; sp.style.flex = "1";
+    const tag = document.createElement("span"); tag.className = "tag st-" + a.status; tag.textContent = a.status;
+    kopf.append(dot, name, sp, tag);
+    const text = document.createElement("div"); text.className = "text"; text.textContent = a.auftrag;
+    box.append(kopf, text);
+    if (a.meldung) { const m = document.createElement("div"); m.className = "meldung"; m.textContent = a.meldung + (a.vorlage ? " (Vorlage)" : ""); box.append(m); }
+    const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "6px";
+    if (a.vorschau) { const b = document.createElement("button"); b.type = "button"; b.className = "mini"; b.textContent = "Ansehen"; b.onclick = () => { schliessenDialogNur(); ansehen(a); }; row.append(b); }
+    if (!kompakt && a.status !== "arbeitet") {
+      const d = document.createElement("button"); d.type = "button"; d.className = "mini"; d.textContent = "Löschen";
+      d.onclick = async () => { try { await api(`/api/studio/auftraege/${a.id}`, { method: "DELETE" }); aktualisieren(); } catch (e) { toast(e.message, true); } };
+      row.append(d);
+    }
+    if (row.children.length) box.append(row);
+    ziel.append(box);
+  }
+}
+function schliessenDialogNur() { $("dialog").hidden = true; dialogFigur = null; }
+function renderListe() { renderJobs($("liste"), auftraege, false); }
+
+let toastTimer = 0;
+function toast(text, fehler) {
+  const t = $("toast"); t.textContent = text; t.style.borderColor = fehler ? "var(--bad)" : "var(--ok)"; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3500);
+}
+function sprechblase(n, text, sek) { n.blase = text; n.blaseBis = performance.now() / 1000 + sek; }
+
+// ================================================================ Server
+async function api(pfad, opt = {}) {
+  const r = await fetch(pfad, { ...opt, headers: { "Content-Type": "application/json" } });
+  let body = {};
+  try { body = await r.json(); } catch (_) { /* leerer Körper */ }
+  if (!r.ok || body.ok === false) throw new Error(body.fehler || `HTTP ${r.status}`);
+  return body;
+}
+
+let erstesLaden = true;
+async function aktualisieren() {
+  try {
+    const [f, a] = await Promise.all([api("/api/studio/figuren"), api("/api/studio/auftraege")]);
+    $("banner").hidden = true;
+    figurDaten = f.figuren;
+    for (const fd of figurDaten) if (!npcs[fd.id]) npcs[fd.id] = npcAnlegen(fd);
+    const alt = new Map(auftraege.map(x => [x.id, x.status]));
+    auftraege = a.auftraege;
+    for (const x of auftraege) {
+      const n = npcs[x.figur]; if (!n) continue;
+      if (!erstesLaden && alt.get(x.id) !== "fertig" && x.status === "fertig") {
+        sprechblase(n, "Fertig! Schau in der Galerie.", 6);
+        toast(`${n.name} ist fertig: „${kurz(x.auftrag, 40)}“`);
+      }
+      if (!erstesLaden && alt.get(x.id) !== "fehler" && x.status === "fehler") { sprechblase(n, "Mist, das ging schief.", 5); toast(`${n.name}: ${x.meldung}`, true); }
+    }
+    for (const n of Object.values(npcs)) {
+      const meine = auftraege.filter(x => x.figur === n.id);
+      const aktiv = meine.find(x => x.status === "arbeitet"), wartend = meine.find(x => x.status === "wartend");
+      n.aufgabe = aktiv || wartend || null;
+      const vorher = n.zustand;
+      n.zustand = aktiv ? "arbeitet" : wartend ? "wartet" : "frei";
+      if (vorher === "frei" && n.zustand !== "frei") n.pfad = [];
+    }
+    galerie = auftraege.filter(x => x.status === "fertig").slice(0, RAHMEN.length);
+    $("zahl").textContent = auftraege.length;
+    if (!$("panel").hidden) renderListe();
+    erstesLaden = false;
+  } catch (e) {
+    $("banner").textContent = "Server nicht erreichbar – starte OBITO mit „python -m obito serve“ und öffne http://127.0.0.1:8765/spiel";
+    $("banner").hidden = false;
+  }
+}
+async function statusLaden() {
+  try {
+    const s = await api("/api/status");
+    $("modell-dot").className = "dot " + (s.verfuegbar ? "ok" : "bad");
+    $("modell-text").textContent = s.verfuegbar ? s.modell : "kein Modell (Vorlagen)";
+  } catch (_) { $("modell-dot").className = "dot bad"; $("modell-text").textContent = "offline"; }
+}
+
+// ================================================================ Zeichnen
+function groesse() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = innerWidth * dpr; canvas.height = innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const spalten = innerWidth < 700 ? 12 : 22;       // Handy: näher ran, sonst sieht man nichts
+  zoom = Math.max(0.6, Math.min(2.2, Math.min(innerWidth / (spalten * TS), innerHeight / (9 * TS))));
+}
+addEventListener("resize", groesse);
+
+function kamera() {
+  const s = TS * zoom, ww = COLS * s, wh = ROWS * s;
+  const zx = (spieler.x + 0.5) * s - innerWidth / 2, zy = (spieler.y + 0.5) * s - innerHeight / 2;
+  const tx = ww < innerWidth ? (ww - innerWidth) / 2 : Math.max(0, Math.min(ww - innerWidth, zx));
+  const ty = wh < innerHeight ? (wh - innerHeight) / 2 : Math.max(0, Math.min(wh - innerHeight, zy));
+  camX += (tx - camX) * 0.15; camY += (ty - camY) * 0.15;
+}
+
+function kachel(x, y, t) {
+  const s = TS * zoom, px = Math.floor(x * s - camX), py = Math.floor(y * s - camY), v = grid[y][x];
+  if (px > innerWidth || py > innerHeight || px + s < 0 || py + s < 0) return;
+  const z = zoneVon(x, y);
+  const boden = z ? ZONEN[z].boden : ["#161d2e", "#1a2236"];
+  ctx.fillStyle = boden[(x + y) % 2]; ctx.fillRect(px, py, s + 1, s + 1);
+  if (v === 1) {
+    ctx.fillStyle = "#0b1020"; ctx.fillRect(px, py, s + 1, s + 1);
+    ctx.fillStyle = "#26314d"; ctx.fillRect(px, py, s + 1, s * 0.22);
+  } else if (v === 2) {
+    const zid = zoneVon(x, y), n = Object.values(npcs).find(n => n.zone === zid);
+    ctx.fillStyle = "#5b4128"; ctx.fillRect(px + 1, py + s * 0.35, s - 1, s * 0.5);
+    ctx.fillStyle = "#3e2c1b"; ctx.fillRect(px + 1, py + s * 0.8, s - 1, s * 0.12);
+    // Monitor
+    ctx.fillStyle = "#0a0f1c"; ctx.fillRect(px + s * 0.18, py + s * 0.02, s * 0.64, s * 0.42);
+    const arbeitet = n && n.zustand === "arbeitet";
+    ctx.fillStyle = arbeitet ? (ZONEN[zid].farbe) : "#1b2a44";
+    ctx.globalAlpha = arbeitet ? 0.85 : 1;
+    ctx.fillRect(px + s * 0.23, py + s * 0.07, s * 0.54, s * 0.32);
+    ctx.globalAlpha = 1;
+    if (arbeitet) {               // laufender Code
+      ctx.fillStyle = "#06101c";
+      for (let i = 0; i < 4; i++) {
+        const w = ((Math.sin(t * 3 + i * 1.7 + x) + 1) / 2) * 0.4 + 0.08;
+        ctx.fillRect(px + s * 0.27, py + s * (0.1 + i * 0.07), s * w, s * 0.03);
+      }
+    }
+  } else if (v === 3) {
+    ctx.fillStyle = "#5a3a22"; ctx.fillRect(px + s * 0.3, py + s * 0.6, s * 0.4, s * 0.32);
+    ctx.fillStyle = "#2f9e5b"; ctx.beginPath(); ctx.arc(px + s / 2, py + s * 0.42, s * 0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = "#43c574"; ctx.beginPath(); ctx.arc(px + s * 0.42, py + s * 0.34, s * 0.14, 0, 7); ctx.fill();
+  } else if (v === 4) {
+    ctx.fillStyle = "#2b3a5c"; ctx.fillRect(px, py, s + 1, s + 1);
+    ctx.fillStyle = "#3a8ee0"; ctx.fillRect(px + 3, py + 3, s - 5, s - 5);
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    ctx.fillRect(px + s * (0.3 + 0.2 * Math.sin(t * 2 + x + y)), py + s * 0.4, s * 0.2, s * 0.06);
+  }
+}
+
+function zeichneRahmen(t) {
+  const s = TS * zoom;
+  RAHMEN.forEach((r, i) => {
+    const a = galerie[i], px = r.x * s - camX, py = r.y * s - camY;
+    ctx.fillStyle = "#c9a45c"; ctx.fillRect(px + s * 0.08, py + s * 0.12, s * 0.84, s * 0.76);
+    ctx.fillStyle = a ? ((npcs[a.figur] || {}).farbe || "#888") : "#20283d";
+    ctx.fillRect(px + s * 0.16, py + s * 0.2, s * 0.68, s * 0.6);
+    if (a) {
+      ctx.fillStyle = "rgba(6,16,28,.65)";
+      ctx.fillRect(px + s * 0.22, py + s * 0.28, s * 0.56, s * 0.08);
+      ctx.fillRect(px + s * 0.22, py + s * 0.44, s * 0.38, s * 0.06);
+      ctx.fillRect(px + s * 0.22, py + s * 0.56, s * 0.46, s * 0.06);
+      if (naheZiel && naheZiel.ref === a) {
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 6);
+        ctx.strokeRect(px + s * 0.06, py + s * 0.1, s * 0.88, s * 0.8); ctx.globalAlpha = 1;
+      }
+    }
+  });
+  ctx.font = `bold ${Math.round(11 * zoom)}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.textAlign = "center"; ctx.fillStyle = "#c9a45c";
+  ctx.fillText("GALERIE – fertige Arbeiten", 19.9 * s - camX, 2.5 * s - camY);
+}
+
+function zeichneSchilder() {
+  const s = TS * zoom;
+  ctx.textAlign = "center";
+  ctx.font = `bold ${Math.round(12 * zoom)}px ${getComputedStyle(document.body).fontFamily}`;
+  for (const z of Object.values(ZONEN)) {
+    const x = ((z.x0 + z.x1 + 1) / 2) * s - camX, y = (z.y0 + 0.55) * s - camY;
+    const w = ctx.measureText(z.name).width + 16 * zoom;
+    ctx.fillStyle = "rgba(5,9,18,.75)"; ctx.fillRect(x - w / 2, y - 11 * zoom, w, 16 * zoom);
+    ctx.fillStyle = z.farbe; ctx.fillText(z.name, x, y + 1 * zoom);
+  }
+  ctx.fillStyle = "rgba(230,237,247,.55)";
+  ctx.fillText("OBITO STUDIO", 20 * s - camX, 11.6 * s - camY);
+}
+
+function zeichneFigur(e, t, istSpieler) {
+  const s = TS * zoom, px = e.x * s - camX, py = e.y * s - camY;
+  const bob = e.laufen ? Math.abs(Math.sin(e.laufen * 10)) * s * 0.06 : 0;
+  const sitzt = !istSpieler && e.zustand === "arbeitet" && !e.pfad.length;
+  // Schatten
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(px + s / 2, py + s * 0.92, s * 0.28, s * 0.09, 0, 0, 7); ctx.fill();
+  // Beine
+  const schritt = e.laufen ? Math.sin(e.laufen * 10) * s * 0.07 : 0;
+  ctx.fillStyle = "#1c2236";
+  ctx.fillRect(px + s * 0.34 + schritt, py + s * 0.72 - bob, s * 0.12, s * 0.2);
+  ctx.fillRect(px + s * 0.54 - schritt, py + s * 0.72 - bob, s * 0.12, s * 0.2);
+  // Körper
+  ctx.fillStyle = e.farbe; ctx.fillRect(px + s * 0.28, py + s * 0.4 - bob, s * 0.44, s * 0.36);
+  // Arme (tippen beim Arbeiten)
+  const tipp = sitzt ? Math.sin(t * 18) * s * 0.04 : 0;
+  ctx.fillRect(px + s * 0.18, py + s * 0.44 - bob + tipp, s * 0.1, s * 0.24);
+  ctx.fillRect(px + s * 0.72, py + s * 0.44 - bob - tipp, s * 0.1, s * 0.24);
+  // Kopf
+  ctx.fillStyle = "#f1c9a5"; ctx.fillRect(px + s * 0.3, py + s * 0.1 - bob, s * 0.4, s * 0.32);
+  ctx.fillStyle = istSpieler ? "#3b2a1c" : shade(e.farbe);
+  ctx.fillRect(px + s * 0.28, py + s * 0.06 - bob, s * 0.44, s * 0.1);
+  // Augen
+  ctx.fillStyle = "#101522";
+  const ax = e.dir > 0 ? 0.06 : -0.06;
+  ctx.fillRect(px + s * (0.4 + ax), py + s * 0.22 - bob, s * 0.06, s * 0.07);
+  ctx.fillRect(px + s * (0.54 + ax), py + s * 0.22 - bob, s * 0.06, s * 0.07);
+  // Name
+  ctx.font = `bold ${Math.round(10 * zoom)}px ${getComputedStyle(document.body).fontFamily}`;
+  ctx.textAlign = "center";
+  const nameY = py - s * 0.05 - bob;
+  const w = ctx.measureText(e.name).width + 8 * zoom;
+  ctx.fillStyle = "rgba(5,9,18,.7)"; ctx.fillRect(px + s / 2 - w / 2, nameY - 9 * zoom, w, 12 * zoom);
+  ctx.fillStyle = istSpieler ? "#fff" : e.farbe; ctx.fillText(e.name, px + s / 2, nameY);
+  // Hervorhebung
+  if (naheZiel && naheZiel.ref === e) {
+    ctx.strokeStyle = e.farbe; ctx.lineWidth = 2; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 6);
+    ctx.beginPath(); ctx.ellipse(px + s / 2, py + s * 0.92, s * 0.42, s * 0.15, 0, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  if (!istSpieler) zeichneBlase(e, px + s / 2, nameY - 14 * zoom, t);
+}
+
+function zeichneBlase(n, cx, by, t) {
+  let text = null;
+  if (n.blase && t < n.blaseBis) text = n.blase;
+  else if (n.zustand === "arbeitet") text = "baue: " + kurz(n.aufgabe && n.aufgabe.auftrag, 22) + ".".repeat(1 + Math.floor(t * 2) % 3);
+  else if (n.zustand === "wartet") text = "gleich dran …";
+  if (!text) return;
+  ctx.font = `${Math.round(11 * zoom)}px ${getComputedStyle(document.body).fontFamily}`;
+  const w = ctx.measureText(text).width + 14 * zoom, h = 18 * zoom, x = cx - w / 2, y = by - h;
+  ctx.fillStyle = "#f4f7fb"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 6 * zoom) : ctx.rect(x, y, w, h); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx - 4 * zoom, y + h); ctx.lineTo(cx + 4 * zoom, y + h); ctx.lineTo(cx, y + h + 5 * zoom); ctx.fill();
+  ctx.fillStyle = "#101522"; ctx.textAlign = "center"; ctx.fillText(text, cx, y + h - 5 * zoom);
+}
+
+function shade(hex) {
+  const n = parseInt(hex.slice(1), 16), f = 0.55;
+  return `rgb(${((n >> 16) & 255) * f | 0},${((n >> 8) & 255) * f | 0},${(n & 255) * f | 0})`;
+}
+
+// ================================================================ Schleife
+let letzte = performance.now();
+function schleife(now) {
+  const dt = Math.min(0.05, (now - letzte) / 1000), t = now / 1000; letzte = now;
+  if (!offen()) spielerSteuern(dt);
+  if (!spieler.pfad.length) {
+    if (spieler.ansprechen && npcs[spieler.ansprechen]) { const n = npcs[spieler.ansprechen]; spieler.ansprechen = null; if (Math.hypot(n.x - spieler.x, n.y - spieler.y) < 2.2) dialogOeffnen(n); }
+    if (spieler.oeffnen) { const a = galerie.find(g => g.id === spieler.oeffnen); spieler.oeffnen = null; if (a) ansehen(a); }
+  }
+  for (const n of Object.values(npcs)) { npcDenken(n, dt, t); bewegen(n, dt); }
+  naheSuchen();
+  kamera();
+
+  ctx.fillStyle = "#070b16"; ctx.fillRect(0, 0, innerWidth, innerHeight);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) kachel(x, y, t);
+  zeichneRahmen(t);
+  zeichneSchilder();
+  const alle = [...Object.values(npcs).map(n => [n, false]), [spieler, true]].sort((a, b) => a[0].y - b[0].y);
+  for (const [e, sp] of alle) zeichneFigur(e, t, sp);
+  requestAnimationFrame(schleife);
+}
+
+groesse();
+camX = (spieler.x + 0.5) * TS * zoom - innerWidth / 2; camY = (spieler.y + 0.5) * TS * zoom - innerHeight / 2;
+aktualisieren(); statusLaden();
+setInterval(aktualisieren, 2000);
+setInterval(statusLaden, 15000);
+requestAnimationFrame(schleife);
+</script>
+</body>
+</html>

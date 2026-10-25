@@ -35,6 +35,7 @@ from .memory import KINDS, Memory
 __all__ = ["ObitoServer", "ObitoHandler", "INDEX_PATH", "DEPTHS", "memory_to_dict"]
 
 INDEX_PATH = Path(__file__).resolve().parent / "static" / "index.html"
+SPIEL_PATH = Path(__file__).resolve().parent / "static" / "spiel.html"
 DEPTHS = ("auto", "schnell", "mittel", "tief")
 _LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1", "[::1]"}
 _MAX_LIST = 500
@@ -350,6 +351,13 @@ _ROUTES: tuple[_Route, ...] = (
     ("POST", re.compile(r"^/api/geo/plan$"), "route_geo_plan"),
     ("GET", re.compile(r"^/api/geo/sonne$"), "route_geo_sonne"),
     ("GET", re.compile(r"^/api/geo/wetter$"), "route_geo_wetter"),
+    ("GET", re.compile(r"^/spiel$"), "route_spiel"),
+    ("GET", re.compile(r"^/api/studio/figuren$"), "route_studio_figuren"),
+    ("GET", re.compile(r"^/api/studio/auftraege$"), "route_studio_auftraege_get"),
+    ("POST", re.compile(r"^/api/studio/auftraege$"), "route_studio_auftraege_post"),
+    ("GET", re.compile(r"^/api/studio/auftraege/(\d+)$"), "route_studio_auftrag_get"),
+    ("DELETE", re.compile(r"^/api/studio/auftraege/(\d+)$"), "route_studio_auftrag_delete"),
+    ("GET", re.compile(r"^/studio/(\d+)/?$"), "route_studio_vorschau"),
 )
 
 
@@ -1492,6 +1500,69 @@ class ObitoHandler(BaseHTTPRequestHandler):
 
 
 # ----------------------------------------------------------------- Komfort
+
+    # ------------------------------------------------------------ Spielwelt / Studio
+    def _studio(self):
+        studio = getattr(self.server.brain, "studio", None)
+        if studio is None:
+            raise _HttpError(503, "Das Studio ist in diesem Denkkern nicht verfügbar")
+        return studio
+
+    def route_spiel(self) -> None:
+        try:
+            body = SPIEL_PATH.read_bytes()
+        except OSError as e:
+            raise _HttpError(404, f"Spielwelt nicht gefunden: {e}") from None
+        self._send_bytes(200, body, "text/html; charset=utf-8", {
+            "X-Frame-Options": "DENY",
+            "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": "default-src 'self' 'unsafe-inline' data: blob:; "
+                                       "connect-src 'self'; frame-src 'self'; frame-ancestors 'none'",
+        })
+
+    def route_studio_figuren(self) -> None:
+        self._send_json(200, {"ok": True, "figuren": self._studio().figuren()})
+
+    def route_studio_auftraege_get(self) -> None:
+        studio = self._studio()
+        self._send_json(200, {"ok": True, "auftraege": studio.store.list(_MAX_LIST),
+                              "statistik": studio.store.stats()})
+
+    def route_studio_auftraege_post(self) -> None:
+        data = self.body or {}
+        figur = self._opt_str(data, "figur", required=True)
+        auftrag = self._opt_str(data, "auftrag", required=True)
+        try:
+            rec = self._studio().submit(figur, auftrag)
+        except ValueError as e:
+            raise _HttpError(400, str(e)) from None
+        self._send_json(201, {"ok": True, "auftrag": rec})
+
+    def route_studio_auftrag_get(self, auftrag_id: str) -> None:
+        rec = self._studio().store.get(int(auftrag_id))
+        if rec is None:
+            raise _HttpError(404, f"Auftrag {auftrag_id} nicht gefunden")
+        self._send_json(200, {"ok": True, "auftrag": rec})
+
+    def route_studio_auftrag_delete(self, auftrag_id: str) -> None:
+        if not self._studio().delete(int(auftrag_id)):
+            raise _HttpError(404, f"Auftrag {auftrag_id} nicht gefunden")
+        self._send_json(200, {"ok": True})
+
+    def route_studio_vorschau(self, auftrag_id: str) -> None:
+        path = self._studio().datei(int(auftrag_id))
+        if path is None:
+            raise _HttpError(404, f"Kein fertiges Ergebnis für Auftrag {auftrag_id}")
+        # Eigener, undurchsichtiger Ursprung (sandbox ohne allow-same-origin): die erzeugte Seite
+        # kann weder die API aufrufen noch Daten der OBITO-Oberfläche lesen.
+        self._send_bytes(200, path.read_bytes(), "text/html; charset=utf-8", {
+            "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals allow-popups; "
+                                       "default-src 'self' 'unsafe-inline' data: blob:; connect-src 'none'; "
+                                       "frame-ancestors 'self'",
+        })
+
+
 def serve(brain, host: str | None = None, port: int | None = None, *, allow_dangerous: bool = False,
           on_start: Callable[[ObitoServer], None] | None = None) -> ObitoServer:
     """Startet den Server blockierend (``serve_forever``); Strg+C beendet ihn sauber.
@@ -1509,3 +1580,4 @@ def serve(brain, host: str | None = None, port: int | None = None, *, allow_dang
     finally:
         server.server_close()
     return server
+
