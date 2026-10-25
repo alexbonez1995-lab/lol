@@ -54,6 +54,7 @@ komplexe das volle Gremium mit Kritiker und Revision.
 | **Simulation** | Zeitschritt-Modelle: Schwebeflug (LiPo-Kennlinie, Innenwiderstand, Peukert, Nutzlast), Steigflug mit Regler, Fall mit Luftwiderstand (RK4), Thermik (Ein-Knoten), PID-Sprungantwort, Akku-Entladung, Balken-Parameterstudie – mit Diagramm, Kennzahlen, Warnungen und Annahmen. |
 | **Welt & Karten** | Offline-Geodäsie: Entfernung/Kurs (Haversine), Flugplan mit Wind je Abschnitt, Sonnenauf-/-untergang und Sonnenstand (NOAA), Tag-Nacht-Grenze, UTM, Orte und Routen je Projekt; Karte mit Gradnetz im HUD. Wetter und Kartenkacheln (Open-Meteo, OpenStreetMap) **nur** mit `online: true`. |
 | **HUD** | Dunkle Command-Center-Oberfläche (eine HTML-Datei, kein CDN): Chat mit Live-Denk-Spur, Gedächtnis, Lektionen, Projekte, Datenzentrum, Missionen, Automationen, Modell-Hub, System, Geräte, 3D-Modellierung, Simulation, Weltkarte. |
+| **Spielwelt (Studio)** | `http://127.0.0.1:8765/spiel`: begehbare Pixel-Welt. Du läufst mit WASD/Klick herum und gibst KI-Figuren Aufträge: **PIXEL** baut Webseiten, **BYTE** Apps und Mini-Spiele, **NOVA** Pläne, **KERNEL** schreibt PC-Befehlspläne (führt noch nichts aus). Die Figuren laufen an ihren Schreibtisch, arbeiten im Hintergrund mit dem lokalen Modell, fertige Ergebnisse hängen in der Galerie und öffnen sich in einer Sandbox. |
 | **App** | `python -m obito app` bzw. `OBITO.bat`: Server im Hintergrund + HUD als eigenes Fenster (Edge/Chrome-App-Modus oder pywebview); `build_exe.bat` baut `dist/OBITO/OBITO.exe`. |
 | **CLI** | Vollständige Kommandozeile mit deutschem Chat (`/befehle`), `doctor`, Datensatz-Export, Eval, Training, Modell-Hub, Geräte, 3D, Simulation, Geo. |
 
@@ -342,6 +343,19 @@ OBITO.bat, start_obito.sh, build_exe.bat, pyproject.toml, obito.example.json
 Tests: `python -m unittest discover -s tests`.
 
 ---
+
+## Spielwelt
+
+`python -m obito serve` starten und `http://127.0.0.1:8765/spiel` öffnen (oder im HUD oben auf **▶ Spielwelt**).
+
+* **Laufen:** WASD/Pfeiltasten oder auf den Boden klicken/tippen. **E** spricht die nächste Figur an, **Q** zeigt alle Aufträge.
+* **Auftrag geben:** Figur ansprechen, Wunsch eintippen („Webseite für meinen Döner-Laden mit Speisekarte“). Die Figur geht an ihren Platz und baut.
+* **Ergebnis:** erscheint in der Galerie oben am Platz und unter „Aufträge“; Dateien liegen in `<data_dir>/studio/<id>/index.html`.
+* **Ohne Ollama** bauen die Figuren eine gekennzeichnete Vorlage statt abzubrechen.
+* **Sicherheit:** Erzeugte Seiten laufen in einer Sandbox ohne Zugriff auf die OBITO-API. **KERNEL** erstellt nur Pläne; echtes Ausführen am PC („PC-Brücke“ mit Freigabe je Schritt) ist der nächste Ausbauschritt.
+
+API: `GET /api/studio/figuren`, `GET|POST /api/studio/auftraege` (`{"figur": "pixel", "auftrag": "…"}`),
+`GET|DELETE /api/studio/auftraege/<id>`, Vorschau unter `GET /studio/<id>/`.
 
 ## Grenzen und ehrliche Hinweise
 

@@ -48,6 +48,7 @@ from .memory import Memory, MemoryStore, normalize
 from .missions import MissionRunner, MissionStore
 from .projects import ProjectStore
 from .simulation import register_tools as register_simulation_tools
+from .studio import Studio, StudioStore
 from .sysmon import Sampler
 from .sysmon import register_tools as register_sysmon_tools
 from .tools import (ToolRegistry, ToolStreamFilter, default_registry, needs_tools, parse_tool_calls,
@@ -319,6 +320,8 @@ class Brain:
         register_geometry_tools(self.tools, self.models3d)
         register_simulation_tools(self.tools)
         register_geo_tools(self.tools, self.geo, lambda: bool(self.cfg.online))
+        # Spielwelt: KI-Figuren bauen Webseiten, Apps, Pläne
+        self.studio = Studio(StudioStore(cfg.studio_db), cfg.studio_dir, chat=self._studio_chat)
 
         # Embedder: echtes Backend immer, Fake nur wenn „oben“. Liefert das Backend None
         # (kein Embedding-Modell, Server weg), fällt die Suche auf Volltext zurück.
@@ -381,6 +384,10 @@ class Brain:
             if not getattr(e, "model_name", None):
                 e.model_name = model  # type: ignore[attr-defined]
             raise
+
+    def _studio_chat(self, messages: list[dict], max_tokens: int) -> str:
+        """Modellaufruf für die Studio-Figuren (ohne Gedächtnis/Experten, nur der Bauauftrag)."""
+        return self._chat(messages, max_tokens=max_tokens, temperature=0.6).text
 
     @staticmethod
     def _safe_parse(parser: Callable[[str], Any], text: str) -> Any:
@@ -1336,6 +1343,7 @@ class Brain:
             "geraete": self.devices.stats(),
             "modelle3d": self.models3d.stats(),
             "geo": self.geo.stats(),
+            "studio": self.studio.store.stats(),
             "online": bool(cfg.online),
         }
 
@@ -1352,6 +1360,7 @@ class Brain:
                 fn()
 
         for action in (
+            lambda: _call(getattr(self, "studio", None), "close"),
             lambda: _call(self.automation, "stop"),
             lambda: _call(getattr(self.automation, "store", None), "close"),
             lambda: _call(getattr(self.missions, "store", None), "close"),
